@@ -68,6 +68,7 @@ class Caption_Generator():
         return initial_hidden, initial_memory
 
     def build_model(self):
+        #context = tf.placeholder("float32", [self.batch_size, self.ctx_shape[0], self.ctx_shape[1]])  # change
         context = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps, self.ctx_shape[0], self.ctx_shape[1]])  #change
         sentence = tf.placeholder("int32", [self.batch_size, self.n_lstm_steps])
         mask = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps])
@@ -75,14 +76,14 @@ class Caption_Generator():
         h, c = self.get_initial_lstm(tf.reduce_mean(context, 1))
 
         # TensorFlow가 dot(3D tensor, matrix) 계산을 못함;;; ㅅㅂ 삽질 ㄱㄱ
-        context_flat = tf.reshape(context, [-1, self.dim_ctx])
-        context_encode = tf.matmul(context_flat, self.image_att_W) # (batch_size, 196, 512)
-        context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]])
+        #context_flat = tf.reshape(context, [-1, self.dim_ctx])
+        #context_encode = tf.matmul(context_flat, self.image_att_W) # (batch_size, 196, 512)
+        #context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]])
 
         loss = 0.0
 
         for ind in range(self.n_lstm_steps):
-
+            #for senctence embed
             if ind == 0:
                 word_emb = tf.zeros([self.batch_size, self.dim_embed])
             else:
@@ -92,11 +93,18 @@ class Caption_Generator():
 
             x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b # (batch_size, hidden*4)
 
+            #for labels
             labels = tf.expand_dims(sentence[:,ind], 1) #[batch_size, 1]
             indices = tf.expand_dims(tf.range(0, self.batch_size, 1), 1) #[batch_size, 1]
             concated = tf.concat(1, [indices, labels])
             onehot_labels = tf.sparse_to_dense( concated, tf.pack([self.batch_size, self.n_words]), 1.0, 0.0)
 
+            # for context
+            context_flat = tf.reshape(context, [-1, self.dim_ctx])
+            context_encode = tf.matmul(context_flat, self.image_att_W)  # (batch_size, 196, 512)
+            context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]])
+
+            #for att
             context_encode = context_encode + \
                  tf.expand_dims(tf.matmul(h, self.hidden_att_W), 1) + self.pre_att_b
 
