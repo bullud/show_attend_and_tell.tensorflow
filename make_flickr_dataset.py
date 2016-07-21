@@ -4,11 +4,13 @@ import os
 import cPickle
 from cnn_util import *
 
-vgg_model = '/home/taeksoo/Package/caffe/models/vgg/VGG_ILSVRC_19_layers.caffemodel'
-vgg_deploy = '/home/taeksoo/Package/caffe/models/vgg/VGG_ILSVRC_19_layers_deploy.prototxt'
+vgg_model = '/home/lidian/models/VGG/VGG_ILSVRC_19_layers.caffemodel'
+vgg_deploy = '/home/lidian/models/VGG/VGG_ILSVRC_19_layers_deploy.prototxt'
 
-annotation_path = './data/results_20130124.token'
-flickr_image_path = '../show_attend_and_tell/images/flickr30k-images/'
+annotation_path   = '/home/lidian/models/Flickr8k/Flickr8k.token.txt'
+flickr_image_path = '/home/lidian/models/Flickr8k/Flickr8k_Dataset/'
+
+#output data
 feat_path = './data/feats.npy'
 annotation_result_path = './data/annotations.pickle'
 

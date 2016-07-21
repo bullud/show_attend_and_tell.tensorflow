@@ -247,9 +247,9 @@ def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게
 
     caption_generator = Caption_Generator(
             n_words=n_words,
-            dim_embed=dim_embed,
-            dim_ctx=dim_ctx,
-            dim_hidden=dim_hidden,
+            dim_embed=dim_embed,          #m
+            dim_ctx=dim_ctx,              #D
+            dim_hidden=dim_hidden,        #n
             n_lstm_steps=maxlen+1, # w1~wN까지 예측한 뒤 마지막에 '.'예측해야하니까 +1
             batch_size=batch_size,
             ctx_shape=ctx_shape,
