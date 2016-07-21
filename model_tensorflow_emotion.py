@@ -68,7 +68,7 @@ class Caption_Generator():
         return initial_hidden, initial_memory
 
     def build_model(self):
-        context = tf.placeholder("float32", [self.batch_size, self.ctx_shape[0], self.ctx_shape[1]])
+        context = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps, self.ctx_shape[0], self.ctx_shape[1]])  #change
         sentence = tf.placeholder("int32", [self.batch_size, self.n_lstm_steps])
         mask = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps])
 
