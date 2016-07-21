@@ -88,7 +88,7 @@ class Caption_Generator():
             else:
                 tf.get_variable_scope().reuse_variables()
                 with tf.device("/cpu:0"):
-                    word_emb = tf.nn.embedding_lookup(self.Wemb, sentence[:,ind-1])
+                    word_emb = tf.nn.embedding_lookup(self.Wemb, sentence[:,ind-1]) #
 
             x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b # (batch_size, hidden*4)
 
