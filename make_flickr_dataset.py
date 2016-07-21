@@ -7,7 +7,7 @@ from cnn_util import *
 vgg_model = '/home/lidian/models/VGG/VGG_ILSVRC_19_layers.caffemodel'
 vgg_deploy = '/home/lidian/models/VGG/VGG_ILSVRC_19_layers_deploy.prototxt'
 
-annotation_path   = '/home/lidian/models/Flickr8k/Flickr8k.token.txt'
+annotation_path   = '/home/lidian/models/Flickr8k/Flickr8k_text/Flickr8k.token.txt'
 flickr_image_path = '/home/lidian/models/Flickr8k/Flickr8k_Dataset/'
 
 #output data

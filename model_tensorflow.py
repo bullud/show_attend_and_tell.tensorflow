@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import cPickle
 
-from tensorflow.models.rnn import rnn_cell
+#from tensorflow.models.rnn import rnn_cell
 import tensorflow.python.platform
 from keras.preprocessing import sequence
 
@@ -195,8 +195,11 @@ def preProBuildWordVocab(sentence_iterator, word_count_threshold=30): # borrowed
     for sent in sentence_iterator:
       nsents += 1
       for w in sent.lower().split(' '):
+        print(w)
         word_counts[w] = word_counts.get(w, 0) + 1
+
     vocab = [w for w in word_counts if word_counts[w] >= word_count_threshold]
+
     print 'filtered words from %d to %d' % (len(word_counts), len(vocab))
 
     ixtoword = {}
@@ -229,13 +232,13 @@ pretrained_model_path = './model/model-8'
 ###### 잡다한 Parameters #####
 annotation_path = './data/annotations.pickle'
 feat_path = './data/feats.npy'
-model_path = './model/'
+model_path = './model_dev/'
 #############################
-
 
 def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게 있으면 초기값 설정.
     annotation_data = pd.read_pickle(annotation_path)
     captions = annotation_data['caption'].values
+
     wordtoix, ixtoword, bias_init_vector = preProBuildWordVocab(captions)
 
     learning_rate=0.001
@@ -250,7 +253,7 @@ def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게
             dim_embed=dim_embed,          #m
             dim_ctx=dim_ctx,              #D
             dim_hidden=dim_hidden,        #n
-            n_lstm_steps=maxlen+1, # w1~wN까지 예측한 뒤 마지막에 '.'예측해야하니까 +1
+            n_lstm_steps=maxlen+1, # w1~wN 까지 예측한 뒤 마지막에 '.'예측해야하니까 +1
             batch_size=batch_size,
             ctx_shape=ctx_shape,
             bias_init_vector=bias_init_vector)
@@ -333,3 +336,4 @@ def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=2
 #    ipdb.set_trace()
 
 
+train(pretrained_model_path=None)

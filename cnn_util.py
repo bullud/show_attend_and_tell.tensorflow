@@ -1,8 +1,12 @@
-import caffe
+import sys
 import ipdb
 import cv2
 import numpy as np
 import skimage
+
+caffe_root='/home/lidian/work/caffe/'
+sys.path.insert(0, caffe_root + 'python')
+import caffe
 
 def crop_image(x, target_height=227, target_width=227):
     image = skimage.img_as_float(skimage.io.imread(x)).astype(np.float32)
@@ -28,9 +32,10 @@ def crop_image(x, target_height=227, target_width=227):
 
     return cv2.resize(resized_image, (target_height, target_width))
 
-deploy = '/home/taeksoo/Package/caffe/models/bvlc_reference_caffenet/deploy.prototxt'
-model = '/home/taeksoo/Package/caffe/models/bvlc_reference_caffenet/bvlc_reference_caffenet.caffemodel'
-mean = '/home/taeksoo/Package/caffe/python/caffe/imagenet/ilsvrc_2012_mean.npy'
+
+deploy = '/home/lidian/models/VGG/VGG_ILSVRC_16_layers_deploy.prototxt'
+model =  '/home/lidian/models/VGG/VGG_ILSVRC_16_layers.caffemodel'
+mean =   '/home/lidian/models/VGG/ilsvrc_2012_mean.npy'
 
 class CNN(object):
 
