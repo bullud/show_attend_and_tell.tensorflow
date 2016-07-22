@@ -231,7 +231,7 @@ pretrained_model_path = './model/model-8'
 ###### 잡다한 Parameters #####
 annotation_path = './data/annotations.pickle'
 feat_path = './data/feats.npy'
-model_path = './model_dev/'
+model_path = './model/'
 #############################
 
 def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게 있으면 초기값 설정.

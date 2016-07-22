@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import cPickle
 
+
 #from tensorflow.models.rnn import rnn_cell
 import tensorflow.python.platform
 from keras.preprocessing import sequence
@@ -19,17 +20,17 @@ class Caption_Generator():
     def init_bias(self, dim_out, name=None):
         return tf.Variable(tf.zeros([dim_out]), name=name)
 
-    def __init__(self, n_words, dim_embed, dim_ctx, dim_hidden, n_lstm_steps, batch_size=200, ctx_shape=[196,512], bias_init_vector=None):
-        self.n_words = n_words
-        self.dim_embed = dim_embed
+    def __init__(self, n_emotions,  dim_ctx, dim_hidden, n_lstm_steps, batch_size=200, ctx_shape=[196,512], bias_init_vector=None):
+        self.n_emotions = n_emotions
+        #self.dim_embed = dim_embed
         self.dim_ctx = dim_ctx
         self.dim_hidden = dim_hidden
         self.ctx_shape = ctx_shape
         self.n_lstm_steps = n_lstm_steps
         self.batch_size = batch_size
 
-        with tf.device("/cpu:0"):
-            self.Wemb = tf.Variable(tf.random_uniform([n_words, dim_embed], -1.0, 1.0), name='Wemb')
+        #with tf.device("/cpu:0"):
+        #    self.Wemb = tf.Variable(tf.random_uniform([n_words, dim_embed], -1.0, 1.0), name='Wemb')
 
         self.init_hidden_W = self.init_weight(dim_ctx, dim_hidden, name='init_hidden_W')
         self.init_hidden_b = self.init_bias(dim_hidden, name='init_hidden_b')
@@ -50,15 +51,14 @@ class Caption_Generator():
         self.att_W = self.init_weight(dim_ctx, 1, name='att_W')
         self.att_b = self.init_bias(1, name='att_b')
 
-        self.decode_lstm_W = self.init_weight(dim_hidden, dim_embed, name='decode_lstm_W')
-        self.decode_lstm_b = self.init_bias(dim_embed, name='decode_lstm_b')
+        self.decode_lstm_W = self.init_weight(dim_hidden, n_emotions, name='decode_lstm_W')
+        self.decode_lstm_b = self.init_bias(n_emotions, name='decode_lstm_b')
 
-        self.decode_word_W = self.init_weight(dim_embed, n_words, name='decode_word_W')
-
+        self.decode_emotion_W = self.init_weight(n_emotions, n_emotions, name='decode_emotion_W')
         if bias_init_vector is not None:
-            self.decode_word_b = tf.Variable(bias_init_vector.astype(np.float32), name='decode_word_b')
+            self.decode_emotion_b = tf.Variable(bias_init_vector.astype(np.float32), name='decode_emotion_b')
         else:
-            self.decode_word_b = self.init_bias(n_words, name='decode_word_b')
+            self.decode_emotion_b = self.init_bias(n_emotions, name='decode_emotion_b')
 
 
     def get_initial_lstm(self, mean_context):
@@ -81,32 +81,34 @@ class Caption_Generator():
         #context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]])
 
         loss = 0.0
-
+        hh=[]
         for ind in range(self.n_lstm_steps):
             #for senctence embed
-            if ind == 0:
-                word_emb = tf.zeros([self.batch_size, self.dim_embed])
-            else:
-                tf.get_variable_scope().reuse_variables()
-                with tf.device("/cpu:0"):
-                    word_emb = tf.nn.embedding_lookup(self.Wemb, sentence[:,ind-1]) #word_emb: [batch_size, dim_embed]
+            #if ind == 0:
+            #    word_emb = tf.zeros([self.batch_size, self.dim_embed])
+            #else:
+            #    tf.get_variable_scope().reuse_variables()
+            #    with tf.device("/cpu:0"):
+            #        word_emb = tf.nn.embedding_lookup(self.Wemb, sentence[:,ind-1]) #word_emb: [batch_size, dim_embed]
 
-            x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b # (batch_size, hidden*4)
+            #x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b # (batch_size, hidden*4)
 
-            #for labels
+            #for labels  TODO:delete
             labels = tf.expand_dims(sentence[:,ind], 1) #[batch_size, 1]
             indices = tf.expand_dims(tf.range(0, self.batch_size, 1), 1) #[batch_size, 1]
             concated = tf.concat(1, [indices, labels])
             onehot_labels = tf.sparse_to_dense( concated, tf.pack([self.batch_size, self.n_words]), 1.0, 0.0)
 
-            # for context
-            context_flat = tf.reshape(context, [-1, self.dim_ctx])
-            context_encode = tf.matmul(context_flat, self.image_att_W)  # (batch_size, 196, 512)
-            context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]])
+            #add for context
+            one_step_context = context[:, ind, :, :]  #[batch_size, 196, 512]
+            context_flat = tf.reshape(one_step_context[-1, self.dim_ctx]) #[batch_size * 196, 512]
+            #context_flat = tf.reshape(context, [-1, self.dim_ctx])
+            context_encode = tf.matmul(context_flat, self.image_att_W)  # [batch_size * 196, 512]
+            context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]]) #[batch_size, 196, 512]
 
             #for att
-            context_encode = context_encode + \
-                 tf.expand_dims(tf.matmul(h, self.hidden_att_W), 1) + self.pre_att_b
+            context_encode = context_encode + tf.expand_dims(tf.matmul(h, self.hidden_att_W), 1) + self.pre_att_b
+            # [batch_size, 196, 512]
 
             context_encode = tf.nn.tanh(context_encode)
 
@@ -118,7 +120,8 @@ class Caption_Generator():
 
             weighted_context = tf.reduce_sum(context * tf.expand_dims(alpha, 2), 1) #[batch_size, dim_ctx]
 
-            lstm_preactive = tf.matmul(h, self.lstm_U) + x_t + tf.matmul(weighted_context, self.image_encode_W)
+            #lstm_preactive = x_t + tf.matmul(h, self.lstm_U) + tf.matmul(weighted_context, self.image_encode_W)
+            lstm_preactive = tf.matmul(h, self.lstm_U) + tf.matmul(weighted_context, self.image_encode_W)
             i, f, o, new_c = tf.split(1, 4, lstm_preactive)
 
             i = tf.nn.sigmoid(i)
@@ -127,18 +130,39 @@ class Caption_Generator():
             new_c = tf.nn.tanh(new_c)
 
             c = f * c + i * new_c
-            h = o * tf.nn.tanh(new_c)
+            h = o * tf.nn.tanh(new_c) #[batch_size, dim_hidden]
 
-            logits = tf.matmul(h, self.decode_lstm_W) + self.decode_lstm_b
-            logits = tf.nn.relu(logits)
-            logits = tf.nn.dropout(logits, 0.5)
+            #add
+            hh.append(tf.expand_dims(h, 1))  #[batch_size, 1, dim_hidden]
 
-            logit_words = tf.matmul(logits, self.decode_word_W) + self.decode_word_b
-            cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logit_words, onehot_labels)
-            cross_entropy = cross_entropy * mask[:,ind]
+            #logits = tf.matmul(h, self.decode_lstm_W) + self.decode_lstm_b
+            #logits = tf.nn.relu(logits)
+            #logits = tf.nn.dropout(logits, 0.5)
 
-            current_loss = tf.reduce_sum(cross_entropy)
-            loss = loss + current_loss
+            #logit_words = tf.matmul(logits, self.decode_word_W) + self.decode_word_b
+            #cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logit_words, onehot_labels)
+            #cross_entropy = cross_entropy * mask[:,ind]
+
+            #current_loss = tf.reduce_sum(cross_entropy)
+            #loss = loss + current_loss
+
+
+
+        hm = np.concatenate([h[i] for i in range(self.n_lstm_steps)], axis=0) #[n_lstm_steps, batch_size, dim_hidden]
+        hm = hm * tf.expand_dims(mask, 2)
+        #TODO compute mean hm
+
+        logits = tf.matmul(hm, self.decode_lstm_W) + self.decode_lstm_b  #[batch_size, n_emotions]
+        logits = tf.nn.relu(logits)
+        logits = tf.nn.dropout(logits, 0.5)
+
+        logit_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logit_emotions, onehot_labels)
+        cross_entropy = cross_entropy * tf.expand_dims(mask, 2)    #[batch_size, self.n_lstm_steps, 1]
+
+        current_loss = tf.reduce_sum(cross_entropy)
+        loss = loss + current_loss
+
 
         loss = loss / tf.reduce_sum(mask)
         return loss, context, sentence, mask

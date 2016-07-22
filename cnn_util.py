@@ -33,8 +33,8 @@ def crop_image(x, target_height=227, target_width=227):
     return cv2.resize(resized_image, (target_height, target_width))
 
 
-deploy = '/home/lidian/models/VGG/VGG_ILSVRC_16_layers_deploy.prototxt'
-model =  '/home/lidian/models/VGG/VGG_ILSVRC_16_layers.caffemodel'
+deploy = '/home/lidian/models/VGG/VGG_ILSVRC_19_layers_deploy.prototxt'
+model =  '/home/lidian/models/VGG/VGG_ILSVRC_19_layers.caffemodel'
 mean =   '/home/lidian/models/VGG/ilsvrc_2012_mean.npy'
 
 class CNN(object):
