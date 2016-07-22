@@ -70,15 +70,17 @@ class Caption_Generator():
     def build_model(self):
         #context = tf.placeholder("float32", [self.batch_size, self.ctx_shape[0], self.ctx_shape[1]])  # change
         context = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps, self.ctx_shape[0], self.ctx_shape[1]])  #change
-        sentence = tf.placeholder("int32", [self.batch_size, self.n_lstm_steps])
+        emotions = tf.placeholder("int32", [self.batch_size])
         mask = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps])
 
         h, c = self.get_initial_lstm(tf.reduce_mean(context, 1))
 
-        # TensorFlow가 dot(3D tensor, matrix) 계산을 못함;;; ㅅㅂ 삽질 ㄱㄱ
-        #context_flat = tf.reshape(context, [-1, self.dim_ctx])
-        #context_encode = tf.matmul(context_flat, self.image_att_W) # (batch_size, 196, 512)
-        #context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]])
+
+        # for labels
+        labels = tf.expand_dims(emotions, 1)  # [batch_size, 1]
+        indices = tf.expand_dims(tf.range(0, self.batch_size, 1), 1)  # [batch_size, 1]
+        concated = tf.concat(1, [indices, labels])
+        onehot_labels = tf.sparse_to_dense(concated, tf.pack([self.batch_size, self.n_emotions]), 1.0, 0.0) #[batch_size, n_emotions]
 
         loss = 0.0
         hh=[]
@@ -93,17 +95,13 @@ class Caption_Generator():
 
             #x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b # (batch_size, hidden*4)
 
-            #for labels  TODO:delete
-            labels = tf.expand_dims(sentence[:,ind], 1) #[batch_size, 1]
-            indices = tf.expand_dims(tf.range(0, self.batch_size, 1), 1) #[batch_size, 1]
-            concated = tf.concat(1, [indices, labels])
-            onehot_labels = tf.sparse_to_dense( concated, tf.pack([self.batch_size, self.n_words]), 1.0, 0.0)
+
 
             #add for context
             one_step_context = context[:, ind, :, :]  #[batch_size, 196, 512]
             context_flat = tf.reshape(one_step_context[-1, self.dim_ctx]) #[batch_size * 196, 512]
             #context_flat = tf.reshape(context, [-1, self.dim_ctx])
-            context_encode = tf.matmul(context_flat, self.image_att_W)  # [batch_size * 196, 512]
+            context_encode = tf.matmul(context_flat, self.image_att_W)    #[batch_size * 196, 512]
             context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]]) #[batch_size, 196, 512]
 
             #for att
@@ -135,37 +133,22 @@ class Caption_Generator():
             #add
             hh.append(tf.expand_dims(h, 1))  #[batch_size, 1, dim_hidden]
 
-            #logits = tf.matmul(h, self.decode_lstm_W) + self.decode_lstm_b
-            #logits = tf.nn.relu(logits)
-            #logits = tf.nn.dropout(logits, 0.5)
+        hc = np.concatenate([h[i] for i in range(self.n_lstm_steps)], axis=1)  #[batch_size, n_lstm_steps, dim_hidden]
 
-            #logit_words = tf.matmul(logits, self.decode_word_W) + self.decode_word_b
-            #cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logit_words, onehot_labels)
-            #cross_entropy = cross_entropy * mask[:,ind]
+        #compute mean hm
+        hm = (hc * tf.expand_dims(mask, 2)).sum(axis=1)/tf.expand_dims(mask.sum(axis=1), 1)  #[batch_size, dim_hidden]
 
-            #current_loss = tf.reduce_sum(cross_entropy)
-            #loss = loss + current_loss
-
-
-
-        hm = np.concatenate([h[i] for i in range(self.n_lstm_steps)], axis=0) #[n_lstm_steps, batch_size, dim_hidden]
-        hm = hm * tf.expand_dims(mask, 2)
-        #TODO compute mean hm
 
         logits = tf.matmul(hm, self.decode_lstm_W) + self.decode_lstm_b  #[batch_size, n_emotions]
         logits = tf.nn.relu(logits)
         logits = tf.nn.dropout(logits, 0.5)
 
-        logit_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logit_emotions, onehot_labels)
-        cross_entropy = cross_entropy * tf.expand_dims(mask, 2)    #[batch_size, self.n_lstm_steps, 1]
+        logit_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b  #[batch_size, n_emotions]
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logit_emotions, onehot_labels) #[batch_size, 1]
 
-        current_loss = tf.reduce_sum(cross_entropy)
-        loss = loss + current_loss
+        loss = tf.reduce_sum(cross_entropy)/batch_size
 
-
-        loss = loss / tf.reduce_sum(mask)
-        return loss, context, sentence, mask
+        return loss, context, emotions, mask
 
     def build_generator(self, maxlen):
         context = tf.placeholder("float32", [1, self.ctx_shape[0], self.ctx_shape[1]])
