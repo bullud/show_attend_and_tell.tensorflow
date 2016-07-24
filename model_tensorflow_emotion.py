@@ -6,13 +6,14 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import cPickle
+import dataprovider
 
 
 #from tensorflow.models.rnn import rnn_cell
 import tensorflow.python.platform
 from keras.preprocessing import sequence
 
-class Caption_Generator():
+class Emotion_Recognizer():
 
     def init_weight(self, dim_in, dim_out, name=None, stddev=1.0):
         return tf.Variable(tf.truncated_normal([dim_in, dim_out], stddev=stddev/math.sqrt(float(dim_in))), name=name)
@@ -22,7 +23,6 @@ class Caption_Generator():
 
     def __init__(self, n_emotions,  dim_ctx, dim_hidden, n_lstm_steps, batch_size=200, ctx_shape=[196,512], bias_init_vector=None):
         self.n_emotions = n_emotions
-        #self.dim_embed = dim_embed
         self.dim_ctx = dim_ctx
         self.dim_hidden = dim_hidden
         self.ctx_shape = ctx_shape
@@ -38,7 +38,6 @@ class Caption_Generator():
         self.init_memory_W = self.init_weight(dim_ctx, dim_hidden, name='init_memory_W')
         self.init_memory_b = self.init_bias(dim_hidden, name='init_memory_b')
 
-        self.lstm_W = self.init_weight(dim_embed, dim_hidden*4, name='lstm_W')
         self.lstm_U = self.init_weight(dim_hidden, dim_hidden*4, name='lstm_U')
         self.lstm_b = self.init_bias(dim_hidden*4, name='lstm_b')
 
@@ -68,12 +67,12 @@ class Caption_Generator():
         return initial_hidden, initial_memory
 
     def build_model(self):
-        #context = tf.placeholder("float32", [self.batch_size, self.ctx_shape[0], self.ctx_shape[1]])  # change
         context = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps, self.ctx_shape[0], self.ctx_shape[1]])  #change
         emotions = tf.placeholder("int32", [self.batch_size])
         mask = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps])
 
-        h, c = self.get_initial_lstm(tf.reduce_mean(context, 1))
+        # TODO: need to modify
+        h, c = self.get_initial_lstm(tf.reduce_mean(context[:, 0, :, :], 1))  #[batch_size, dim_hidden]
 
 
         # for labels
@@ -85,28 +84,15 @@ class Caption_Generator():
         loss = 0.0
         hh=[]
         for ind in range(self.n_lstm_steps):
-            #for senctence embed
-            #if ind == 0:
-            #    word_emb = tf.zeros([self.batch_size, self.dim_embed])
-            #else:
-            #    tf.get_variable_scope().reuse_variables()
-            #    with tf.device("/cpu:0"):
-            #        word_emb = tf.nn.embedding_lookup(self.Wemb, sentence[:,ind-1]) #word_emb: [batch_size, dim_embed]
-
-            #x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b # (batch_size, hidden*4)
-
-
-
             #add for context
             one_step_context = context[:, ind, :, :]  #[batch_size, 196, 512]
             context_flat = tf.reshape(one_step_context[-1, self.dim_ctx]) #[batch_size * 196, 512]
-            #context_flat = tf.reshape(context, [-1, self.dim_ctx])
             context_encode = tf.matmul(context_flat, self.image_att_W)    #[batch_size * 196, 512]
             context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]]) #[batch_size, 196, 512]
 
             #for att
             context_encode = context_encode + tf.expand_dims(tf.matmul(h, self.hidden_att_W), 1) + self.pre_att_b
-            # [batch_size, 196, 512]
+            #[batch_size, 196, dim_ctx]
 
             context_encode = tf.nn.tanh(context_encode)
 
@@ -118,7 +104,6 @@ class Caption_Generator():
 
             weighted_context = tf.reduce_sum(context * tf.expand_dims(alpha, 2), 1) #[batch_size, dim_ctx]
 
-            #lstm_preactive = x_t + tf.matmul(h, self.lstm_U) + tf.matmul(weighted_context, self.image_encode_W)
             lstm_preactive = tf.matmul(h, self.lstm_U) + tf.matmul(weighted_context, self.image_encode_W)
             i, f, o, new_c = tf.split(1, 4, lstm_preactive)
 
@@ -135,15 +120,15 @@ class Caption_Generator():
 
         hc = np.concatenate([h[i] for i in range(self.n_lstm_steps)], axis=1)  #[batch_size, n_lstm_steps, dim_hidden]
 
+
         #compute mean hm
-        hm = (hc * tf.expand_dims(mask, 2)).sum(axis=1)/tf.expand_dims(mask.sum(axis=1), 1)  #[batch_size, dim_hidden]
+        hm = tf.reduce_sum(hc * tf.expand_dims(mask, 2), 1)/tf.expand_dims(tf.reduce_sum(mask, 1), 1)  #[batch_size, dim_hidden]
 
-
-        logits = tf.matmul(hm, self.decode_lstm_W) + self.decode_lstm_b  #[batch_size, n_emotions]
+        logits = tf.matmul(hm, self.decode_lstm_W) + self.decode_lstm_b                      #[batch_size, n_emotions]
         logits = tf.nn.relu(logits)
         logits = tf.nn.dropout(logits, 0.5)
 
-        logit_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b  #[batch_size, n_emotions]
+        logit_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b    #[batch_size, n_emotions]
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logit_emotions, onehot_labels) #[batch_size, 1]
 
         loss = tf.reduce_sum(cross_entropy)/batch_size
@@ -151,30 +136,34 @@ class Caption_Generator():
         return loss, context, emotions, mask
 
     def build_generator(self, maxlen):
-        context = tf.placeholder("float32", [1, self.ctx_shape[0], self.ctx_shape[1]])
-        h, c = self.get_initial_lstm(tf.reduce_mean(context, 1))
+        context = tf.placeholder("float32", [1, self.n_lstm_steps, self.ctx_shape[0], self.ctx_shape[1]])
 
-        context_encode = tf.matmul(tf.squeeze(context), self.image_att_W)
-        generated_words = []
+        #TODO: need to modify
+        h, c = self.get_initial_lstm(tf.reduce_mean(context, 1)) #[1, dim_hidden]
+        context = tf.squeeze(context)   #[n_lstm_steps, 196, dim_ctx]
+
+        generated_emotion = []
         logit_list = []
         alpha_list = []
-        word_emb = tf.zeros([1, self.dim_embed])
+
+        hh = []
         for ind in range(maxlen):
-            x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b
+            one_step_context = context[ind, :, :]                           #[196, 512]
+            context_encode = tf.matmul(one_step_context, self.image_att_W)  #[196, 512]
             context_encode = context_encode + tf.matmul(h, self.hidden_att_W) + self.pre_att_b
-            context_encode = tf.nn.tanh(context_encode)
+            context_encode = tf.nn.tanh(context_encode) #[196, 512]
 
-            alpha = tf.matmul(context_encode, self.att_W) + self.att_b
-            alpha = tf.reshape(alpha, [-1, self.ctx_shape[0]] )
-            alpha = tf.nn.softmax(alpha)
+            alpha = tf.matmul(context_encode, self.att_W) + self.att_b  #[196. 1]
+            alpha = tf.reshape(alpha, [-1, self.ctx_shape[0]])   #[1, 196]
+            alpha = tf.nn.softmax(alpha) #[1, 196]
 
-            alpha = tf.reshape(alpha, (ctx_shape[0], -1))
+            alpha = tf.reshape(alpha, (ctx_shape[0], -1))  #[196, 1]
             alpha_list.append(alpha)
 
-            weighted_context = tf.reduce_sum(tf.squeeze(context) * alpha, 0)
-            weighted_context = tf.expand_dims(weighted_context, 0)
+            weighted_context = tf.reduce_sum(tf.squeeze(context)[ind] * alpha, 0) #[dim_ctx]
+            weighted_context = tf.expand_dims(weighted_context, 0)                #[1, dim_ctx]
 
-            lstm_preactive = tf.matmul(h, self.lstm_U) + x_t + tf.matmul(weighted_context, self.image_encode_W)
+            lstm_preactive = tf.matmul(h, self.lstm_U) + tf.matmul(weighted_context, self.image_encode_W)
 
             i, f, o, new_c = tf.split(1, 4, lstm_preactive)
 
@@ -186,93 +175,65 @@ class Caption_Generator():
             c = f*c + i*new_c
             h = o*tf.nn.tanh(new_c)
 
-            logits = tf.matmul(h, self.decode_lstm_W) + self.decode_lstm_b
-            logits = tf.nn.relu(logits)
+            hh.append(tf.expand_dims(h, 1))  # [batch_size=1, 1, dim_hidden]
 
-            logit_words = tf.matmul(logits, self.decode_word_W) + self.decode_word_b
+        hc = np.concatenate([h[i] for i in range(self.n_lstm_steps)], axis=1)  # [batch_size=1, n_lstm_steps, dim_hidden]
 
-            max_prob_word = tf.argmax(logit_words, 1)
+        # compute mean hm
+        hm = tf.reduce_sum(hc, 1) / self.n_lstm_steps   #[batch_size=1, dim_hidden]
 
-            with tf.device("/cpu:0"):
-                word_emb = tf.nn.embedding_lookup(self.Wemb, max_prob_word)
+        logits = tf.matmul(hm, self.decode_lstm_W) + self.decode_lstm_b #[batch_size=1, dim_embed]
 
-            generated_words.append(max_prob_word)
-            logit_list.append(logit_words)
+        logits = tf.nn.relu(logits)
 
-        return context, generated_words, logit_list, alpha_list
+        logit_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b  #[batch_size=1, n_emotions]
 
+        generated_emotion = tf.argmax(logit_emotions, 1)
 
-def preProBuildWordVocab(sentence_iterator, word_count_threshold=30): # borrowed this function from NeuralTalk
-    print 'preprocessing word counts and creating vocab based on word count threshold %d' % (word_count_threshold, )
-    word_counts = {}
-    nsents = 0
-    for sent in sentence_iterator:
-      nsents += 1
-      for w in sent.lower().split(' '):
-        print(w)
-        word_counts[w] = word_counts.get(w, 0) + 1
+        #generated_emotion = max_prob_word
 
-    vocab = [w for w in word_counts if word_counts[w] >= word_count_threshold]
+        #logit_list.append(logit_emotions)
 
-    print 'filtered words from %d to %d' % (len(word_counts), len(vocab))
+        return context, generated_emotion, logit_emotions, alpha_list
 
-    ixtoword = {}
-    ixtoword[0] = '.'  # period at the end of the sentence. make first dimension be end token
-    wordtoix = {}
-    wordtoix['#START#'] = 0 # make first vector be the start token
-    ix = 1
-    for w in vocab:
-      wordtoix[w] = ix
-      ixtoword[ix] = w
-      ix += 1
-
-    word_counts['.'] = nsents
-    bias_init_vector = np.array([1.0*word_counts[ixtoword[i]] for i in ixtoword])
-    bias_init_vector /= np.sum(bias_init_vector) # normalize to frequencies
-    bias_init_vector = np.log(bias_init_vector)
-    bias_init_vector -= np.max(bias_init_vector) # shift to nice numeric range
-    return wordtoix, ixtoword, bias_init_vector
 
 
 ###### 학습 관련 Parameters ######
 n_epochs=1000
 batch_size=80
-dim_embed=256
+n_emotions=7
 dim_ctx=512
 dim_hidden=256
 ctx_shape=[196,512]
 pretrained_model_path = './model/model-8'
 #############################
 ###### 잡다한 Parameters #####
-annotation_path = './data/annotations.pickle'
-feat_path = './data/feats.npy'
+annotation_path = '/home/lidian/models/emotion/'
+feat_dir= '/home/lidian/models/emotion/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3'
 model_path = './model_dev/'
 #############################
 
 def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게 있으면 초기값 설정.
-    annotation_data = pd.read_pickle(annotation_path)
-    captions = annotation_data['caption'].values
 
-    wordtoix, ixtoword, bias_init_vector = preProBuildWordVocab(captions)
+    dp = dataprovider.DataProvider(maxFrame = 100, feat_dir = feat_dir, annotation_path= annotation_path)
 
-    learning_rate=0.001
-    n_words = len(wordtoix)
-    feats = np.load(feat_path)
-    maxlen = np.max( map(lambda x: len(x.split(' ')), captions) )
+    n_emotions = 7
+    maxframe = 16
+
+    learning_rate = 0.001
 
     sess = tf.InteractiveSession()
 
-    caption_generator = Caption_Generator(
-            n_words=n_words,
-            dim_embed=dim_embed,          #m
+    emotion_recognizer = Emotion_Recognizer(
+            n_emotions=n_emotions,        #m
             dim_ctx=dim_ctx,              #D
             dim_hidden=dim_hidden,        #n
-            n_lstm_steps=maxlen+1, # w1~wN 까지 예측한 뒤 마지막에 '.'예측해야하니까 +1
+            n_lstm_steps=maxframe,        #
             batch_size=batch_size,
             ctx_shape=ctx_shape,
-            bias_init_vector=bias_init_vector)
+            bias_init_vector=None)
 
-    loss, context, sentence, mask = caption_generator.build_model()
+    loss, context, emotions, mask = emotion_recognizer.build_model()
     saver = tf.train.Saver(max_to_keep=50)
 
     train_op = tf.train.AdamOptimizer(learning_rate).minimize(loss)
@@ -281,70 +242,55 @@ def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게
         print "Starting with pretrained model"
         saver.restore(sess, pretrained_model_path)
 
-    index = list(annotation_data.index)
-    np.random.shuffle(index)
-    annotation_data = annotation_data.ix[index]
-
-    captions = annotation_data['caption'].values
-    image_id = annotation_data['image_id'].values
-
+    uidx = 0
     for epoch in range(n_epochs):
-        for start, end in zip( \
-                range(0, len(captions), batch_size),
-                range(batch_size, len(captions), batch_size)):
+        num_batch = dp.initEpoch(batch_size, shuffle = True)
 
-            current_feats = feats[ image_id[start:end] ]
-            current_feats = current_feats.reshape(-1, ctx_shape[1], ctx_shape[0]).swapaxes(1,2)
+        #kf = dp.get_minibatches_idx(batch_size, shuffle=True)
 
-            current_captions = captions[start:end]
-            current_caption_ind = map(lambda cap: [wordtoix[word] for word in cap.lower().split(' ')[:-1] if word in wordtoix], current_captions) # '.'은 제거
+        for _ in num_batch:
+            uidx += 1
 
-            current_caption_matrix = sequence.pad_sequences(current_caption_ind, padding='post', maxlen=maxlen+1)
-
-            current_mask_matrix = np.zeros((current_caption_matrix.shape[0], current_caption_matrix.shape[1]))
-            nonzeros = np.array( map(lambda x: (x != 0).sum()+1, current_caption_matrix ))
-
-            for ind, row in enumerate(current_mask_matrix):
-                row[:nonzeros[ind]] = 1
+            # Select the random examples for this minibatch
+            feats, mask, emotions = dp.getTrainBatch()
 
             _, loss_value = sess.run([train_op, loss], feed_dict={
-                context:current_feats,
-                sentence:current_caption_matrix,
-                mask:current_mask_matrix})
+                context:feats,
+                emotions:emotions,
+                mask:mask})
 
             print "Current Cost: ", loss_value
+
         saver.save(sess, os.path.join(model_path, 'model'), global_step=epoch)
+
 
 def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=20):
     annotation_data = pd.read_pickle(annotation_path)
-    captions = annotation_data['caption'].values
-    wordtoix, ixtoword, bias_init_vector = preProBuildWordVocab(captions)
-    n_words = len(wordtoix)
+    emotions = annotation_data['emotion'].values
+
+    n_emotions = 7
     feat = np.load(test_feat).reshape(-1, ctx_shape[1], ctx_shape[0]).swapaxes(1,2)
 
     sess = tf.InteractiveSession()
 
-    caption_generator = Caption_Generator(
-            n_words=n_words,
-            dim_embed=dim_embed,
+    emotion_recognizer = Emotion_Recognizer(
+            n_emotions=n_emotions,
             dim_ctx=dim_ctx,
             dim_hidden=dim_hidden,
             n_lstm_steps=maxlen,
             batch_size=batch_size,
             ctx_shape=ctx_shape)
 
-    context, generated_words, logit_list, alpha_list = caption_generator.build_generator(maxlen=maxlen)
+    context, generated_emotions, logit_list, alpha_list = emotion_recognizer.build_generator(maxlen=maxlen)
     saver = tf.train.Saver()
     saver.restore(sess, model_path)
 
-    generated_word_index = sess.run(generated_words, feed_dict={context:feat})
+    generated_word_index = sess.run(generated_emotions, feed_dict={context:feat})
     alpha_list_val = sess.run(alpha_list, feed_dict={context:feat})
-    generated_words = [ixtoword[x[0]] for x in generated_word_index]
     punctuation = np.argmax(np.array(generated_words) == '.')+1
 
-    generated_words = generated_words[:punctuation]
     alpha_list_val = alpha_list_val[:punctuation]
-    return generated_words, alpha_list_val
+    return generated_emotions, alpha_list_val
 
 #    generated_sentence = ' '.join(generated_words)
 #    ipdb.set_trace()

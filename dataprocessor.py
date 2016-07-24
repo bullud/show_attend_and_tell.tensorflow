@@ -20,14 +20,14 @@ feat_dir       = '/home/lidian/models/emotion/Train_Val_face_qiyi_0.8_con_16_res
 #output data
 feat_result_path = '/home/lidian/models/emotion/datas/emotion_feats.npy'
 mask_result_path = '/home/lidian/models/emotion/datas/mask.npy'
-annotation_result_path = '/home/lidian/models/emotion/datas/emotion_annotations.pickle'
+annotation_path = '/home/lidian/models/emotion/datas/emotion_annotations.pickle'
 
 
 videonames = pd.read_table(os.path.join(annotation_dir, 'train_val_filename.txt'), sep='\n', names=['videoid'])
 videoids = videonames['videoid'].map(lambda x: x[1:10])
 
 framenums  = pd.read_table(os.path.join(annotation_dir, 'train_val_framenum.txt'), sep='\n', names=['framenum'])
-labels     = pd.read_table(os.path.join(annotation_dir, 'train_val_labels.txt'),   sep='\n', names=['labels'])
+labels     = pd.read_table(os.path.join(annotation_dir, 'train_val_labels.txt'),   sep='\n', names=['label'])
 
 annotations = pd.concat([videoids, framenums, labels], axis =1)
 
@@ -35,7 +35,9 @@ annotations = pd.concat([videoids, framenums, labels], axis =1)
 
 ann = pd.merge(annotations, annotations)
 
-ann.to_pickle(annotation_result_path)
+ann.to_pickle(annotation_path)
+
+exit()
 
 print(len(videoids))
 print(framenums['framenum'].min())
@@ -49,10 +51,13 @@ vi = 0
 for vid, fn in zip(annotations['videoid'], annotations['framenum']):
     print(vid, fn)
     filename = os.path.join(feat_dir, vid + ".dat")
-    video_feas = np.zeros((maxframe, 512, 14, 14))
+    video_feas = np.zeros((maxframe, 512, 14, 14), dtype=np.float32)
     video_mask = np.zeros((maxframe))
 
-    video_mask[0:fn] = 1
+    if fn > maxframe:
+        video_mask[0: maxframe] = 1
+    else:
+        video_mask[0: fn] = 1
 
     fi = 0
     with open(filename, 'rb') as f:
@@ -69,15 +74,17 @@ for vid, fn in zip(annotations['videoid'], annotations['framenum']):
 
             fi += 1
 
+            if fi >= maxframe:
+                break
+
     total_feas[vi] = video_feas
     vi += 1
-
-    break
 
 np.save(feat_result_path, total_feas)
 np.save(mask_result_path, total_mask)
 
 exit()
+
 '''
 annotations = pd.read_table(annotation_path, sep='\t', header=None, names=['image', 'caption'])
 annotations['image_num'] = annotations['image'].map(lambda x: x.split('#')[1])

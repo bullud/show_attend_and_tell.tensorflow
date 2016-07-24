@@ -62,15 +62,15 @@ class Caption_Generator():
 
 
     def get_initial_lstm(self, mean_context):
-        initial_hidden = tf.nn.tanh(tf.matmul(mean_context, self.init_hidden_W) + self.init_hidden_b)
-        initial_memory = tf.nn.tanh(tf.matmul(mean_context, self.init_memory_W) + self.init_memory_b)
+        initial_hidden = tf.nn.tanh(tf.matmul(mean_context, self.init_hidden_W) + self.init_hidden_b) #[batch_size, dim_hidden]
+        initial_memory = tf.nn.tanh(tf.matmul(mean_context, self.init_memory_W) + self.init_memory_b) #[batch_size, dim_hidden]
 
         return initial_hidden, initial_memory
 
     def build_model(self):
         context = tf.placeholder("float32", [self.batch_size, self.ctx_shape[0], self.ctx_shape[1]])
-        sentence = tf.placeholder("int32", [self.batch_size, self.n_lstm_steps])
-        mask = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps])
+        sentence = tf.placeholder("int32",  [self.batch_size, self.n_lstm_steps])
+        mask = tf.placeholder("float32",    [self.batch_size, self.n_lstm_steps])
 
         h, c = self.get_initial_lstm(tf.reduce_mean(context, 1))
 
@@ -88,7 +88,7 @@ class Caption_Generator():
             else:
                 tf.get_variable_scope().reuse_variables()
                 with tf.device("/cpu:0"):
-                    word_emb = tf.nn.embedding_lookup(self.Wemb, sentence[:,ind-1]) #word_emb: [batch_size, dim_embed]
+                    word_emb = tf.nn.embedding_lookup(self.Wemb, sentence[:, ind-1]) #word_emb: [batch_size, dim_embed]
 
             x_t = tf.matmul(word_emb, self.lstm_W) + self.lstm_b # (batch_size, hidden*4)
 
@@ -137,9 +137,9 @@ class Caption_Generator():
 
     def build_generator(self, maxlen):
         context = tf.placeholder("float32", [1, self.ctx_shape[0], self.ctx_shape[1]])
-        h, c = self.get_initial_lstm(tf.reduce_mean(context, 1))
+        h, c = self.get_initial_lstm(tf.reduce_mean(context, 1)) #[batch_size, dim_hidden]
 
-        context_encode = tf.matmul(tf.squeeze(context), self.image_att_W)
+        context_encode = tf.matmul(tf.squeeze(context), self.image_att_W) #[196, dim_ctx]
         generated_words = []
         logit_list = []
         alpha_list = []
@@ -300,7 +300,7 @@ def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게
             print "Current Cost: ", loss_value
         saver.save(sess, os.path.join(model_path, 'model'), global_step=epoch)
 
-def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=20):
+def test(test_feat='./guitar_player.npy', model_path='./model/model-1', maxlen=20):
     annotation_data = pd.read_pickle(annotation_path)
     captions = annotation_data['caption'].values
     wordtoix, ixtoword, bias_init_vector = preProBuildWordVocab(captions)
@@ -334,5 +334,6 @@ def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=2
 #    generated_sentence = ' '.join(generated_words)
 #    ipdb.set_trace()
 
+test()
 
-train(pretrained_model_path=None)
+#train(pretrained_model_path=None)
