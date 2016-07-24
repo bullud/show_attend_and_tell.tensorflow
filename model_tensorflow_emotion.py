@@ -118,7 +118,7 @@ class Emotion_Recognizer():
             #add
             hh.append(tf.expand_dims(h, 1))  #[batch_size, 1, dim_hidden]
 
-        hc = tf.concat([hh[i] for i in range(self.n_lstm_steps)], 1)  #[batch_size, n_lstm_steps, dim_hidden]
+        hc = tf.pack(hh)  #[batch_size, n_lstm_steps, dim_hidden]
 
         #compute mean hm
         hm = tf.reduce_sum(hc * tf.expand_dims(mask, 2), 1)/tf.expand_dims(tf.reduce_sum(mask, 1), 1)  #[batch_size, dim_hidden]
