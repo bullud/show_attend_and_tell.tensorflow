@@ -102,7 +102,7 @@ class Emotion_Recognizer():
             alpha = tf.reshape(alpha, [-1, self.ctx_shape[0]]) #[batch_size, 196]
             alpha = tf.nn.softmax( alpha )
 
-            weighted_context = tf.reduce_sum(context * tf.expand_dims(alpha, 2), 1) #[batch_size, dim_ctx]
+            weighted_context = tf.reduce_sum(context[:, ind, :, :] * tf.expand_dims(alpha, 2), 1) #[batch_size, dim_ctx]
 
             lstm_preactive = tf.matmul(h, self.lstm_U) + tf.matmul(weighted_context, self.image_encode_W)
             i, f, o, new_c = tf.split(1, 4, lstm_preactive)
@@ -118,8 +118,7 @@ class Emotion_Recognizer():
             #add
             hh.append(tf.expand_dims(h, 1))  #[batch_size, 1, dim_hidden]
 
-        hc = np.concatenate([h[i] for i in range(self.n_lstm_steps)], axis=1)  #[batch_size, n_lstm_steps, dim_hidden]
-
+        hc = tf.concat([hh[i] for i in range(self.n_lstm_steps)], 1)  #[batch_size, n_lstm_steps, dim_hidden]
 
         #compute mean hm
         hm = tf.reduce_sum(hc * tf.expand_dims(mask, 2), 1)/tf.expand_dims(tf.reduce_sum(mask, 1), 1)  #[batch_size, dim_hidden]
