@@ -117,7 +117,7 @@ class DataProvider():
 if __name__ == '__main__':
     feat_dir = '/home/lidian/models/emotion/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3'
     annotation_path = '/home/lidian/models/emotion/datas/emotion_annotations.pickle'
-    batch_size = 5
+    batch_size = 80
 
     dp = DataProvider(maxFrame = 100, feat_dir = feat_dir, annotation_path= annotation_path)
     num_batch = dp.initEpoch(batch_size=batch_size, shuffle= True)

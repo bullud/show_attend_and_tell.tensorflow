@@ -86,7 +86,7 @@ class Emotion_Recognizer():
         for ind in range(self.n_lstm_steps):
             #add for context
             one_step_context = context[:, ind, :, :]  #[batch_size, 196, 512]
-            context_flat = tf.reshape(one_step_context[-1, self.dim_ctx]) #[batch_size * 196, 512]
+            context_flat = tf.reshape(one_step_context, [-1, self.dim_ctx]) #[batch_size * 196, 512]
             context_encode = tf.matmul(context_flat, self.image_att_W)    #[batch_size * 196, 512]
             context_encode = tf.reshape(context_encode, [-1, ctx_shape[0], ctx_shape[1]]) #[batch_size, 196, 512]
 
@@ -142,8 +142,7 @@ class Emotion_Recognizer():
         h, c = self.get_initial_lstm(tf.reduce_mean(context, 1)) #[1, dim_hidden]
         context = tf.squeeze(context)   #[n_lstm_steps, 196, dim_ctx]
 
-        generated_emotion = []
-        logit_list = []
+
         alpha_list = []
 
         hh = []
@@ -190,9 +189,7 @@ class Emotion_Recognizer():
 
         generated_emotion = tf.argmax(logit_emotions, 1)
 
-        #generated_emotion = max_prob_word
 
-        #logit_list.append(logit_emotions)
 
         return context, generated_emotion, logit_emotions, alpha_list
 
@@ -202,13 +199,15 @@ class Emotion_Recognizer():
 n_epochs=1000
 batch_size=80
 n_emotions=7
+maxFrame = 100
 dim_ctx=512
 dim_hidden=256
 ctx_shape=[196,512]
 pretrained_model_path = './model/model-8'
 #############################
+
 ###### 잡다한 Parameters #####
-annotation_path = '/home/lidian/models/emotion/'
+annotation_path = '/home/lidian/models/emotion/datas/emotion_annotations.pickle'
 feat_dir= '/home/lidian/models/emotion/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3'
 model_path = './model_dev/'
 #############################
@@ -216,9 +215,6 @@ model_path = './model_dev/'
 def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게 있으면 초기값 설정.
 
     dp = dataprovider.DataProvider(maxFrame = 100, feat_dir = feat_dir, annotation_path= annotation_path)
-
-    n_emotions = 7
-    maxframe = 16
 
     learning_rate = 0.001
 
@@ -228,7 +224,7 @@ def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게
             n_emotions=n_emotions,        #m
             dim_ctx=dim_ctx,              #D
             dim_hidden=dim_hidden,        #n
-            n_lstm_steps=maxframe,        #
+            n_lstm_steps=maxFrame,        #
             batch_size=batch_size,
             ctx_shape=ctx_shape,
             bias_init_vector=None)
@@ -246,8 +242,6 @@ def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게
     for epoch in range(n_epochs):
         num_batch = dp.initEpoch(batch_size, shuffle = True)
 
-        #kf = dp.get_minibatches_idx(batch_size, shuffle=True)
-
         for _ in num_batch:
             uidx += 1
 
@@ -264,7 +258,7 @@ def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게
         saver.save(sess, os.path.join(model_path, 'model'), global_step=epoch)
 
 
-def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=20):
+def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=maxFrame):
     annotation_data = pd.read_pickle(annotation_path)
     emotions = annotation_data['emotion'].values
 
@@ -281,18 +275,17 @@ def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=2
             batch_size=batch_size,
             ctx_shape=ctx_shape)
 
-    context, generated_emotions, logit_list, alpha_list = emotion_recognizer.build_generator(maxlen=maxlen)
+    context, generated_emotion, logit_emotion, alpha_list = emotion_recognizer.build_generator(maxlen=maxlen)
+
     saver = tf.train.Saver()
     saver.restore(sess, model_path)
 
-    generated_word_index = sess.run(generated_emotions, feed_dict={context:feat})
+    generated_emotion = sess.run(generated_emotion, feed_dict={context:feat})
+
     alpha_list_val = sess.run(alpha_list, feed_dict={context:feat})
-    punctuation = np.argmax(np.array(generated_words) == '.')+1
 
-    alpha_list_val = alpha_list_val[:punctuation]
-    return generated_emotions, alpha_list_val
+    return generated_emotion, alpha_list_val
 
-#    generated_sentence = ' '.join(generated_words)
 #    ipdb.set_trace()
 
 
