@@ -198,7 +198,7 @@ class Emotion_Recognizer():
 
 
 ###### 학습 관련 Parameters ######
-n_epochs=1000
+n_epochs=100
 batch_size=20
 n_emotions=7
 maxFrame = 100

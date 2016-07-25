@@ -12,7 +12,7 @@ def bytes2int( tb, order='big'):
     for j in seq: i = (i<<8)+ int(tb[j].encode('hex'), 16)
     return i
 
-phrase = 'train'
+phrase = 'test'
 
 #input data
 in_annotation_dir = ''
