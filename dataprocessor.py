@@ -12,52 +12,65 @@ def bytes2int( tb, order='big'):
     for j in seq: i = (i<<8)+ int(tb[j].encode('hex'), 16)
     return i
 
-maxframe = 100
+phrase = 'train'
 
-annotation_dir = '/home/lidian/models/emotion/labels'
-feat_dir       = '/home/lidian/models/emotion/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3'
-
+#input data
+in_annotation_dir = ''
+in_feat_dir       = ''
+in_filename_list  = ''
+in_framenum_list  = ''
+in_labels_list    = ''
 #output data
-feat_result_path = '/home/lidian/models/emotion/datas/emotion_feats.npy'
-mask_result_path = '/home/lidian/models/emotion/datas/mask.npy'
-annotation_path = '/home/lidian/models/emotion/datas/emotion_annotations.pickle'
+out_feat_dir       = ''
+out_annotation_path = ''
 
+#for train_val
+if phrase == 'train':
+    in_annotation_dir = '/home/lidian/models/emotion/labels'
+    in_feat_dir       = '/home/lidian/models/emotion/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3'
+    in_filename_list  = 'train_val_filename.txt'
+    in_framenum_list  = 'train_val_framenum.txt'
+    in_labels_list    = 'train_val_labels.txt'
 
-videonames = pd.read_table(os.path.join(annotation_dir, 'train_val_filename.txt'), sep='\n', names=['videoid'])
+    out_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+    out_annotation_path = '/home/lidian/models/emotion/datas/train_val_emotion_annotations.pickle'
+
+#for test
+elif phrase == 'test':
+    in_annotation_dir = '/home/lidian/models/emotion/labels'
+    in_feat_dir       = '/home/lidian/models/emotion/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3'
+    in_filename_list  = 'test_filename.txt'
+    in_framenum_list  = 'test_framenum.txt'
+    in_labels_list    = 'test_labels.txt'
+
+    out_feat_dir        = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+    out_annotation_path = '/home/lidian/models/emotion/datas/test_emotion_annotations.pickle'
+
+else:
+    print("phrase unsupported")
+    exit()
+
+############################################
+videonames = pd.read_table(os.path.join(in_annotation_dir, in_filename_list), sep='\n', names=['videoid'])
 videoids = videonames['videoid'].map(lambda x: x[1:10])
 
-framenums  = pd.read_table(os.path.join(annotation_dir, 'train_val_framenum.txt'), sep='\n', names=['framenum'])
-labels     = pd.read_table(os.path.join(annotation_dir, 'train_val_labels.txt'),   sep='\n', names=['label'])
+framenums  = pd.read_table(os.path.join(in_annotation_dir, in_framenum_list), sep='\n', names=['framenum'])
+labels     = pd.read_table(os.path.join(in_annotation_dir, in_labels_list),   sep='\n', names=['label'])
 
 annotations = pd.concat([videoids, framenums, labels], axis =1)
 
-#annotations.to_pickle(annotation_result_path)
-
 ann = pd.merge(annotations, annotations)
 
-ann.to_pickle(annotation_path)
+#prepare annotation
+ann.to_pickle(out_annotation_path)
 
-exit()
 
-print(len(videoids))
-print(framenums['framenum'].min())
-
-videonum = len(annotations)
-
-total_feas = np.zeros((videonum, maxframe, 512, 14, 14))
-total_mask = np.zeros((videonum, maxframe,))
-
-vi = 0
+#prepare feature
 for vid, fn in zip(annotations['videoid'], annotations['framenum']):
     print(vid, fn)
-    filename = os.path.join(feat_dir, vid + ".dat")
-    video_feas = np.zeros((maxframe, 512, 14, 14), dtype=np.float32)
-    video_mask = np.zeros((maxframe))
+    filename = os.path.join(in_feat_dir, vid + ".dat")
 
-    if fn > maxframe:
-        video_mask[0: maxframe] = 1
-    else:
-        video_mask[0: fn] = 1
+    video_feats = np.zeros((fn, 196, 512), dtype=np.float32)
 
     fi = 0
     with open(filename, 'rb') as f:
@@ -66,37 +79,17 @@ for vid, fn in zip(annotations['videoid'], annotations['framenum']):
             if not data:
                 break
 
-            ind = struct.unpack("i", data) # index = bytes2int(fi, 'little')
+            ind = struct.unpack("i", data)  # index = bytes2int(fi, 'little')
 
-            fea = f.read(512*14*14*4)
+            fea = f.read(512 * 14 * 14 * 4)
 
-            video_feas[fi] = np.fromstring(fea, dtype=np.float32).reshape((512, 14, 14))
+            video_feats[fi] = np.fromstring(fea, dtype=np.float32).reshape((512, 196)).swapaxes(0, 1) #switch feature the vector
 
             fi += 1
 
-            if fi >= maxframe:
-                break
+    if fi != fn:
+        print('%d framenum miss match !!!!!!!' % (vid))
+        break
 
-    total_feas[vi] = video_feas
-    vi += 1
-
-np.save(feat_result_path, total_feas)
-np.save(mask_result_path, total_mask)
-
-exit()
-
-'''
-annotations = pd.read_table(annotation_path, sep='\t', header=None, names=['image', 'caption'])
-annotations['image_num'] = annotations['image'].map(lambda x: x.split('#')[1])
-annotations['image'] = annotations['image'].map(lambda x: os.path.join(flickr_image_path,x.split('#')[0]))
-
-unique_images = annotations['image'].unique()
-image_df = pd.DataFrame({'image':unique_images, 'image_id':range(len(unique_images))})
-
-annotations = pd.merge(annotations, image_df)
-annotations.to_pickle(annotation_result_path)
-
-if not os.path.exists(feat_path):
-    feats = cnn.get_features(unique_images, layers='conv5_3', layer_sizes=[512,14,14])
-    np.save(feat_path, feats)
-'''
+    filename = os.path.join(out_feat_dir, vid)
+    np.save(filename, arr = video_feats)

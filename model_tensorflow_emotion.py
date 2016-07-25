@@ -68,15 +68,16 @@ class Emotion_Recognizer():
 
     def build_model(self):
         context = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps, self.ctx_shape[0], self.ctx_shape[1]])  #change
-        emotions = tf.placeholder("int32", [self.batch_size])
+        emotion = tf.placeholder("int32", [self.batch_size])
         mask = tf.placeholder("float32", [self.batch_size, self.n_lstm_steps])
+
 
         # TODO: need to modify
         h, c = self.get_initial_lstm(tf.reduce_mean(context[:, 0, :, :], 1))  #[batch_size, dim_hidden]
 
 
         # for labels
-        labels = tf.expand_dims(emotions, 1)  # [batch_size, 1]
+        labels = tf.expand_dims(emotion, 1)  # [batch_size, 1]
         indices = tf.expand_dims(tf.range(0, self.batch_size, 1), 1)  # [batch_size, 1]
         concated = tf.concat(1, [indices, labels])
         onehot_labels = tf.sparse_to_dense(concated, tf.pack([self.batch_size, self.n_emotions]), 1.0, 0.0) #[batch_size, n_emotions]
@@ -96,7 +97,7 @@ class Emotion_Recognizer():
 
             context_encode = tf.nn.tanh(context_encode)
 
-            # 여기도 context_encode: 3D -> flat required
+            # context_encode: 3D -> flat required
             context_encode_flat = tf.reshape(context_encode, [-1, self.dim_ctx]) # (batch_size*196, 512)
             alpha = tf.matmul(context_encode_flat, self.att_W) + self.att_b # (batch_size*196, 1)
             alpha = tf.reshape(alpha, [-1, self.ctx_shape[0]]) #[batch_size, 196]
@@ -118,7 +119,8 @@ class Emotion_Recognizer():
             #add
             hh.append(tf.expand_dims(h, 1))  #[batch_size, 1, dim_hidden]
 
-        hc = tf.pack(hh)  #[batch_size, n_lstm_steps, dim_hidden]
+        #hc = tf.pack(hh)  #[batch_size, n_lstm_steps, dim_hidden]
+        hc = tf.concat(1, [hh[i] for i in range(self.n_lstm_steps)])  # [batch_size, n_lstm_steps, dim_hidden]
 
         #compute mean hm
         hm = tf.reduce_sum(hc * tf.expand_dims(mask, 2), 1)/tf.expand_dims(tf.reduce_sum(mask, 1), 1)  #[batch_size, dim_hidden]
@@ -132,7 +134,8 @@ class Emotion_Recognizer():
 
         loss = tf.reduce_sum(cross_entropy)/batch_size
 
-        return loss, context, emotions, mask
+        #loss = tf.reduce_sum(h) + tf.reduce_sum(c)
+        return loss, context, emotion, mask
 
     def build_generator(self, maxlen):
         context = tf.placeholder("float32", [1, self.n_lstm_steps, self.ctx_shape[0], self.ctx_shape[1]])
@@ -196,7 +199,7 @@ class Emotion_Recognizer():
 
 ###### 학습 관련 Parameters ######
 n_epochs=1000
-batch_size=80
+batch_size=20
 n_emotions=7
 maxFrame = 100
 dim_ctx=512
@@ -206,14 +209,22 @@ pretrained_model_path = './model/model-8'
 #############################
 
 ###### 잡다한 Parameters #####
-annotation_path = '/home/lidian/models/emotion/datas/emotion_annotations.pickle'
-feat_dir= '/home/lidian/models/emotion/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3'
+trainVal_annotation_path = '/home/lidian/models/emotion/datas/train_emotion_annotations.pickle'
+trainVal_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+
+test_annotation_path     = '/home/lidian/models/emotion/datas/train_emotion_annotations.pickle'
+test_feat_dir            = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+
+
+
 model_path = './model_dev/'
 #############################
 
-def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게 있으면 초기값 설정.
+def train(pretrained_model_path=pretrained_model_path):
 
-    dp = dataprovider.DataProvider(maxFrame = 100, feat_dir = feat_dir, annotation_path= annotation_path)
+    dp = dataprovider.DataProvider(maxFrame = 100, valid_portion = 0.1,
+                                   trainValfeat_dir = trainVal_feat_dir, trainAnnotation_path= trainVal_annotation_path,
+                                   testfeat_dir = test_feat_dir, testAnnotation_path = test_annotation_path)
 
     learning_rate = 0.001
 
@@ -228,7 +239,7 @@ def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게
             ctx_shape=ctx_shape,
             bias_init_vector=None)
 
-    loss, context, emotions, mask = emotion_recognizer.build_model()
+    loss, context, emotion, mask = emotion_recognizer.build_model()
     saver = tf.train.Saver(max_to_keep=50)
 
     train_op = tf.train.AdamOptimizer(learning_rate).minimize(loss)
@@ -241,20 +252,21 @@ def train(pretrained_model_path=pretrained_model_path): # 전에 학습하던게
     for epoch in range(n_epochs):
         num_batch = dp.initEpoch(batch_size, shuffle = True)
 
-        for _ in num_batch:
+        for batchi in range(num_batch):
             uidx += 1
 
             # Select the random examples for this minibatch
-            feats, mask, emotions = dp.getTrainBatch()
+            feats, masks, emotions = dp.getTrainBatch()
 
             _, loss_value = sess.run([train_op, loss], feed_dict={
                 context:feats,
-                emotions:emotions,
-                mask:mask})
+                emotion:emotions,
+                mask:masks})
 
-            print "Current Cost: ", loss_value
+            print("epoch %d, batch %D, Current Cost: ") %(epoch, batchi, loss_value)
 
         saver.save(sess, os.path.join(model_path, 'model'), global_step=epoch)
+
 
 
 def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=maxFrame):

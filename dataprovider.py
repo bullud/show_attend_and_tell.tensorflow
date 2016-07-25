@@ -14,32 +14,47 @@ def bytes2int( tb, order='big'):
 
 
 class DataProvider():
-    def __init__(self, maxFrame, feat_dir, annotation_path):
+    def __init__(self, maxFrame, valid_portion, trainValfeat_dir, trainAnnotation_path, testfeat_dir, testAnnotation_path):
         self.maxFrame = maxFrame
 
-        self.annotation = pd.read_pickle(annotation_path)
-        self.feat_dir = feat_dir
+        self.trainValAnnotation = pd.read_pickle(trainAnnotation_path)
+        self.trainValfeat_dir = trainValfeat_dir
+
+        self.testAnnotation = pd.read_pickle(testAnnotation_path)
+        self.testfeat_dir = testfeat_dir
 
         self.tkf = None
         self.vkf = None
-        self.tkf = None
+        self.ekf = None
 
         self.tind = -1
         self.vind = -1
-        self.tind = -1
+        self.eind = -1
 
+        self.valid_portion = valid_portion
 
-    def getTrainBatch(self):
-        idx_list = self.tkf[self.tind]
+        n = len(self.trainValAnnotation)
+        self.n_train = n * (1 - self.valid_portion)
+        self.n_val = n - self.n_train
 
-        self.tind = (self.tind + 1) % len(self.tkf) #update tind
+        sidx = np.random.permutation(n)
+        self.train_set = sidx[:self.n_train]
+        self.valid_set = sidx[self.n_train:]
 
-        ann_list = self.annotation.iloc[idx_list[1]]
+        self.test_set = range(len(self.testAnnotation))
 
-        print(ann_list)
+        print(self.train_set)
+
+    def getFeature(self, idx_list, feat_dir):
+
+        ann_list = self.trainValAnnotation.iloc[idx_list[1]]
+
+        self.tind = (self.tind + 1) % len(self.tkf)  # update tind
+
+        #print(ann_list)
 
         #emotions
-        emotions = ann_list['label']
+        emotions = np.array(ann_list['label'])
 
         fn = ann_list['framenum']
 
@@ -57,14 +72,14 @@ class DataProvider():
             i += 1
 
         #feat
-        feats = np.zeros((len(ann_list), self.maxFrame, 512, 14, 14))
+        feats = np.zeros((len(ann_list), self.maxFrame, 196, 512))
 
         vi = 0
         for vid in ann_list['videoid']:
-            #print(vid, fni)
+            '''
             filename = os.path.join(self.feat_dir, vid + ".dat")
 
-            video_feats = np.zeros((self.maxFrame, 512, 14, 14), dtype=np.float32)
+            video_feats = np.zeros((self.maxFrame, 196, 512), dtype=np.float32)
 
             fi = 0
             with open(filename, 'rb') as f:
@@ -77,41 +92,102 @@ class DataProvider():
 
                     fea = f.read(512 * 14 * 14 * 4)
 
-                    video_feats[fi] = np.fromstring(fea, dtype=np.float32).reshape((512, 14, 14))
+                    video_feats[fi] = np.fromstring(fea, dtype=np.float32).reshape((512, 196)).swapaxes(0, 1)
 
                     fi += 1
 
                     if fi >= self.maxFrame:
                         break
+            '''
 
+            filename = os.path.join(feat_dir, vid + ".npy")
+
+            fea = np.load(filename)
+
+            video_feats = np.zeros((self.maxFrame, 196, 512), dtype=np.float32)
+
+            fn = fea.shape[0]
+            if fn > self.maxFrame:
+                fn = self.maxFrame
+            #print(fn)
+            for i in range(fn):
+                video_feats[i] = fea[i]
+
+            ######################################################
             feats[vi] = video_feats
             vi += 1
 
-
         return feats, masks, emotions
 
+    def getTrainBatch(self):
+        idx_list = self.tkf[self.tind]
 
-    def initEpoch(self, batch_size, shuffle = True):
-        n = len(self.annotation)
-        idx_list = np.arange(n, dtype="int32")
+        return self.getFeature(idx_list, self.trainValfeat_dir)
 
+    def initTrainEpoch(self, batch_size, shuffle = True):
         if shuffle:
-            np.random.shuffle(idx_list)
+            np.random.shuffle(self.train_set)
 
         batches = []
         batch_start = 0
 
-        for i in range(n // batch_size):
-            batches.append(idx_list[batch_start:
+        for i in range(len(self.train_set) // batch_size):
+            batches.append(self.train_set[batch_start:
             batch_start + batch_size])
             batch_start += batch_size
 
-        if (batch_start != n):
+        #if (batch_start != n):
             # Make a minibatch out of what is left
-            batches.append(idx_list[batch_start:])
+        #    batches.append(idx_list[batch_start:])
 
         self.tkf = zip(range(len(batches)), batches)
         self.tind = 0
+        return len(batches)
+
+    def getValidBatch(self):
+        idx_list = self.tkf[self.vind]
+
+        return self.getFeature(idx_list, self.trainValfeat_dir)
+
+    def initValidEpoch(self, batch_size, shuffle=True):
+        if shuffle:
+            np.random.shuffle(self.valid_set)
+
+        batches = []
+        batch_start = 0
+
+        for i in range(len(self.valid_set) // batch_size):
+            batches.append(self.valid_set[batch_start:
+            batch_start + batch_size])
+            batch_start += batch_size
+
+            # if (batch_start != n):
+            # Make a minibatch out of what is left
+            # batches.append(idx_list[batch_start:])
+
+        self.vkf = zip(range(len(batches)), batches)
+        self.vind = 0
+        return len(batches)
+
+    def getTestBatch(self):
+        idx_list = self.ekf[self.eind]
+
+        return self.getFeature(idx_list, self.testfeat_dir)
+
+    def initTestEpoch(self, batch_size, shuffle=False):
+        if shuffle:
+            np.random.shuffle(self.test_set)
+
+        batches = []
+        batch_start = 0
+
+        for i in range(len(self.test_set) // batch_size):
+            batches.append(self.test_set[batch_start:
+            batch_start + batch_size])
+            batch_start += batch_size
+
+        self.ekf = zip(range(len(batches)), batches)
+        self.eind = 0
         return len(batches)
 
 if __name__ == '__main__':
