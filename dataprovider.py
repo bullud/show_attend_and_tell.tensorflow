@@ -43,7 +43,7 @@ class DataProvider():
 
         self.test_set = range(len(self.testAnnotation))
 
-        print(self.train_set)
+        #print(self.train_set)
 
     def getFeature(self, idx_list, feat_dir):
 
@@ -136,9 +136,9 @@ class DataProvider():
             batch_start + batch_size])
             batch_start += batch_size
 
-        #if (batch_start != n):
+        #if (batch_start != len(self.train_set)):
             # Make a minibatch out of what is left
-        #    batches.append(idx_list[batch_start:])
+        #    batches.append(self.train_set[batch_start:])
 
         self.tkf = zip(range(len(batches)), batches)
         self.tind = 0
@@ -149,7 +149,7 @@ class DataProvider():
 
         return self.getFeature(idx_list, self.trainValfeat_dir)
 
-    def initValidEpoch(self, batch_size, shuffle=True):
+    def initValidEpoch(self, batch_size, shuffle=False):
         if shuffle:
             np.random.shuffle(self.valid_set)
 

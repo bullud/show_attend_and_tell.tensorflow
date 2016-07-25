@@ -129,13 +129,13 @@ class Emotion_Recognizer():
         logits = tf.nn.relu(logits)
         logits = tf.nn.dropout(logits, 0.5)
 
-        logit_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b    #[batch_size, n_emotions]
-        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(logit_emotions, onehot_labels) #[batch_size, 1]
+        pred_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b    #[batch_size, n_emotions]
+        cross_entropy = tf.nn.softmax_cross_entropy_with_logits(pred_emotions, onehot_labels) #[batch_size, 1]
 
         loss = tf.reduce_sum(cross_entropy)/batch_size
 
-        #loss = tf.reduce_sum(h) + tf.reduce_sum(c)
-        return loss, context, emotion, mask
+
+        return loss, pred_emotions, context, emotion, mask
 
     def build_generator(self, maxlen):
         context = tf.placeholder("float32", [1, self.n_lstm_steps, self.ctx_shape[0], self.ctx_shape[1]])
@@ -143,7 +143,6 @@ class Emotion_Recognizer():
         #TODO: need to modify
         h, c = self.get_initial_lstm(tf.reduce_mean(context, 1)) #[1, dim_hidden]
         context = tf.squeeze(context)   #[n_lstm_steps, 196, dim_ctx]
-
 
         alpha_list = []
 
@@ -191,17 +190,15 @@ class Emotion_Recognizer():
 
         generated_emotion = tf.argmax(logit_emotions, 1)
 
-
-
         return context, generated_emotion, logit_emotions, alpha_list
 
 
 
 ###### 학습 관련 Parameters ######
-n_epochs=100
-batch_size=20
+n_epochs=500
+batch_size=30
 n_emotions=7
-maxFrame = 100
+maxFrame = 80
 dim_ctx=512
 dim_hidden=256
 ctx_shape=[196,512]
@@ -209,10 +206,10 @@ pretrained_model_path = './model/model-8'
 #############################
 
 ###### 잡다한 Parameters #####
-trainVal_annotation_path = '/home/lidian/models/emotion/datas/train_emotion_annotations.pickle'
+trainVal_annotation_path = '/home/lidian/models/emotion/datas/train_val_emotion_annotations.pickle'
 trainVal_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
 
-test_annotation_path     = '/home/lidian/models/emotion/datas/train_emotion_annotations.pickle'
+test_annotation_path     = '/home/lidian/models/emotion/datas/test_emotion_annotations.pickle'
 test_feat_dir            = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
 
 
@@ -222,10 +219,10 @@ model_path = './model_dev/'
 
 def train(pretrained_model_path=pretrained_model_path):
 
-    dp = dataprovider.DataProvider(maxFrame = 100, valid_portion = 0.1,
+    dp = dataprovider.DataProvider(maxFrame = maxFrame, valid_portion = 0.0,
                                    trainValfeat_dir = trainVal_feat_dir, trainAnnotation_path= trainVal_annotation_path,
                                    testfeat_dir = test_feat_dir, testAnnotation_path = test_annotation_path)
-
+    display_step = 5
     learning_rate = 0.001
 
     sess = tf.InteractiveSession()
@@ -239,38 +236,48 @@ def train(pretrained_model_path=pretrained_model_path):
             ctx_shape=ctx_shape,
             bias_init_vector=None)
 
-    loss, context, emotion, mask = emotion_recognizer.build_model()
+    loss, pred_emotions, context, emotion, mask = emotion_recognizer.build_model()
+
+    correct_pred = tf.equal(tf.cast(tf.argmax(pred_emotions, 1), tf.int32), emotion)
+
+    accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+
     saver = tf.train.Saver(max_to_keep=50)
 
     train_op = tf.train.AdamOptimizer(learning_rate).minimize(loss)
+
     tf.initialize_all_variables().run()
+
     if pretrained_model_path is not None:
         print "Starting with pretrained model"
         saver.restore(sess, pretrained_model_path)
 
     uidx = 0
     for epoch in range(n_epochs):
-        num_batch = dp.initEpoch(batch_size, shuffle = True)
+        num_batch = dp.initTrainEpoch(batch_size, shuffle = True)
 
         for batchi in range(num_batch):
-            uidx += 1
+
 
             # Select the random examples for this minibatch
             feats, masks, emotions = dp.getTrainBatch()
 
-            _, loss_value = sess.run([train_op, loss], feed_dict={
-                context:feats,
-                emotion:emotions,
-                mask:masks})
+            sess.run(train_op, feed_dict={ context:feats, emotion:emotions, mask:masks})
 
-            print("epoch %d, batch %D, Current Cost: ") %(epoch, batchi, loss_value)
+            if uidx % display_step == 0 :
+                acc  = sess.run(accuracy, feed_dict={ context:feats, emotion:emotions, mask:masks })
+                cost = sess.run(loss,     feed_dict={ context:feats, emotion:emotions, mask:masks })
+
+                print("epoch %d, batch %d, cost %f, accurracy %f ") % (epoch, batchi, cost, acc)
+
+            uidx += 1
 
         saver.save(sess, os.path.join(model_path, 'model'), global_step=epoch)
 
 
 
 def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=maxFrame):
-    annotation_data = pd.read_pickle(annotation_path)
+    annotation_data = pd.read_pickle(test_annotation_path)
     emotions = annotation_data['emotion'].values
 
     n_emotions = 7
