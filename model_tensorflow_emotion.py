@@ -202,6 +202,7 @@ maxFrame = 80
 dim_ctx=512
 dim_hidden=256
 ctx_shape=[196,512]
+valid_portion = 0.0
 pretrained_model_path = './model/model-8'
 #############################
 
@@ -219,7 +220,7 @@ model_path = './model_dev/'
 
 def train(pretrained_model_path=pretrained_model_path):
 
-    dp = dataprovider.DataProvider(maxFrame = maxFrame, valid_portion = 0.0,
+    dp = dataprovider.DataProvider(maxFrame = maxFrame, valid_portion = valid_portion,
                                    trainValfeat_dir = trainVal_feat_dir, trainAnnotation_path= trainVal_annotation_path,
                                    testfeat_dir = test_feat_dir, testAnnotation_path = test_annotation_path)
     display_step = 5
@@ -252,6 +253,8 @@ def train(pretrained_model_path=pretrained_model_path):
         print "Starting with pretrained model"
         saver.restore(sess, pretrained_model_path)
 
+    num_test_batch = dp.initTestEpoch(batch_size, shuffle= True)
+
     uidx = 0
     for epoch in range(n_epochs):
         num_batch = dp.initTrainEpoch(batch_size, shuffle = True)
@@ -265,10 +268,17 @@ def train(pretrained_model_path=pretrained_model_path):
             sess.run(train_op, feed_dict={ context:feats, emotion:emotions, mask:masks})
 
             if uidx % display_step == 0 :
-                acc  = sess.run(accuracy, feed_dict={ context:feats, emotion:emotions, mask:masks })
-                cost = sess.run(loss,     feed_dict={ context:feats, emotion:emotions, mask:masks })
+                cost = sess.run(loss, feed_dict={context: feats, emotion: emotions, mask: masks})
 
-                print("epoch %d, batch %d, cost %f, accurracy %f ") % (epoch, batchi, cost, acc)
+                #acc  = sess.run(accuracy, feed_dict={ context:feats, emotion:emotions, mask:masks })
+                acc_mean = 0.0
+                for test_batchi in range(num_test_batch):
+                    tfeats, tmasks, temotions = dp.getTestBatch()
+                    acc = sess.run(accuracy, feed_dict={context: tfeats, emotion: temotions, mask: tmasks})
+                    acc_mean += acc
+
+                acc_mean = acc_mean/num_test_batch
+                print("epoch %d, batch %d, cost %f, accurracy %f ") % (epoch, batchi, cost, acc_mean)
 
             uidx += 1
 

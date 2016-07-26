@@ -45,11 +45,7 @@ class DataProvider():
 
         #print(self.train_set)
 
-    def getFeature(self, idx_list, feat_dir):
-
-        ann_list = self.trainValAnnotation.iloc[idx_list[1]]
-
-        self.tind = (self.tind + 1) % len(self.tkf)  # update tind
+    def getFeature(self, ann_list, feat_dir):
 
         #print(ann_list)
 
@@ -122,7 +118,13 @@ class DataProvider():
     def getTrainBatch(self):
         idx_list = self.tkf[self.tind]
 
-        return self.getFeature(idx_list, self.trainValfeat_dir)
+        self.tind = (self.tind + 1) % len(self.tkf)  # update tind
+
+        ann_list = self.trainValAnnotation.iloc[idx_list[1]]
+
+        return self.getFeature(ann_list, self.trainValfeat_dir)
+
+
 
     def initTrainEpoch(self, batch_size, shuffle = True):
         if shuffle:
@@ -147,7 +149,11 @@ class DataProvider():
     def getValidBatch(self):
         idx_list = self.tkf[self.vind]
 
-        return self.getFeature(idx_list, self.trainValfeat_dir)
+        self.vind = (self.vind + 1) % len(self.vkf)  # update vind
+
+        ann_list = self.trainValAnnotation.iloc[idx_list[1]]
+
+        return self.getFeature(ann_list, self.trainValfeat_dir)
 
     def initValidEpoch(self, batch_size, shuffle=False):
         if shuffle:
@@ -172,7 +178,11 @@ class DataProvider():
     def getTestBatch(self):
         idx_list = self.ekf[self.eind]
 
-        return self.getFeature(idx_list, self.testfeat_dir)
+        self.eind = (self.eind + 1) % len(self.ekf)  # update eind
+
+        ann_list = self.testAnnotation.iloc[idx_list[1]]
+
+        return self.getFeature(ann_list, self.testfeat_dir)
 
     def initTestEpoch(self, batch_size, shuffle=False):
         if shuffle:
