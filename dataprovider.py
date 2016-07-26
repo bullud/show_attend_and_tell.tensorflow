@@ -70,7 +70,7 @@ class DataProvider():
             i += 1
 
         #feat
-        feats = np.zeros((len(ann_list), self.maxFrame, 196, 512))
+        feats = np.zeros((len(ann_list), self.maxFrame, 49, 512))
 
         vi = 0
         for vid in ann_list['videoid']:
@@ -113,7 +113,7 @@ class DataProvider():
                 if cachable:
                     self.mem_caches[vid] = fea
 
-            video_feats = np.zeros((self.maxFrame, 196, 512), dtype=np.float32)
+            video_feats = np.zeros((self.maxFrame, 49, 512), dtype=np.float32)
 
             fn = fea.shape[0]
             if fn > self.maxFrame:

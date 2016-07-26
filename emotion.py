@@ -199,17 +199,17 @@ n_emotions=7
 maxFrame = 80
 dim_ctx=512
 dim_hidden=256
-ctx_shape=[196,512]
+ctx_shape=[49,512]
 valid_portion = 0.0
 pretrained_model_path = './model/model-8'
 #############################
 
 ###### 잡다한 Parameters #####
 trainVal_annotation_path = '/home/lidian/models/emotion/datas/train_val_emotion_annotations.pickle'
-trainVal_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+trainVal_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3_49_512'
 
 test_annotation_path     = '/home/lidian/models/emotion/datas/test_emotion_annotations.pickle'
-test_feat_dir            = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+test_feat_dir            = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_49_512'
 
 
 
