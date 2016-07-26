@@ -2,8 +2,9 @@ import pandas as pd
 import numpy as np
 import os
 import cPickle
-from cnn_util import *
+#from cnn_util import *
 import struct
+from collections import OrderedDict
 
 def bytes2int( tb, order='big'):
     if order == 'big': seq=[0,1,2,3]
@@ -43,9 +44,10 @@ class DataProvider():
 
         self.test_set = range(len(self.testAnnotation))
 
+        self.mem_caches = OrderedDict()
         #print(self.train_set)
 
-    def getFeature(self, ann_list, feat_dir):
+    def getFeature(self, ann_list, feat_dir, cachable = False):
 
         #print(ann_list)
 
@@ -96,9 +98,20 @@ class DataProvider():
                         break
             '''
 
-            filename = os.path.join(feat_dir, vid + ".npy")
+            #disk_cache_filename = os.path.join(feat_dir, vid + "-" + str(self.maxFrame) + "-cache.npy")
+            #if False: #os.path.isfile(cache_filename):
+            #    feats[vi] = np.load(disk_cache_filename)
+            #else:
+            fea = None
+            if self.mem_caches.has_key(vid):
+                #print('use cache')
+                fea = self.mem_caches[vid]
+            else:
+                filename = os.path.join(feat_dir, vid + ".npy")
 
-            fea = np.load(filename)
+                fea = np.load(filename)
+                if cachable:
+                    self.mem_caches[vid] = fea
 
             video_feats = np.zeros((self.maxFrame, 196, 512), dtype=np.float32)
 
@@ -109,8 +122,12 @@ class DataProvider():
             for i in range(fn):
                 video_feats[i] = fea[i]
 
-            ######################################################
+            #np.save(cache_filename, video_feats)
+
             feats[vi] = video_feats
+
+            ######################################################
+
             vi += 1
 
         return feats, masks, emotions
@@ -122,8 +139,7 @@ class DataProvider():
 
         ann_list = self.trainValAnnotation.iloc[idx_list[1]]
 
-        return self.getFeature(ann_list, self.trainValfeat_dir)
-
+        return self.getFeature(ann_list, self.trainValfeat_dir, True)
 
 
     def initTrainEpoch(self, batch_size, shuffle = True):
@@ -182,7 +198,7 @@ class DataProvider():
 
         ann_list = self.testAnnotation.iloc[idx_list[1]]
 
-        return self.getFeature(ann_list, self.testfeat_dir)
+        return self.getFeature(ann_list, self.testfeat_dir, True)
 
     def initTestEpoch(self, batch_size, shuffle=False):
         if shuffle:
