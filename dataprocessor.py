@@ -12,7 +12,7 @@ def bytes2int( tb, order='big'):
     for j in seq: i = (i<<8)+ int(tb[j].encode('hex'), 16)
     return i
 
-phrase = 'test'
+phrase = 'train'
 
 #input data
 in_annotation_dir = ''
@@ -24,26 +24,29 @@ in_labels_list    = ''
 out_feat_dir       = ''
 out_annotation_path = ''
 
+fea_map_size = 49
+kernel_num   = 512
+
 #for train_val
 if phrase == 'train':
     in_annotation_dir = '/home/lidian/models/emotion/labels'
-    in_feat_dir       = '/home/lidian/models/emotion/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3'
+    in_feat_dir       = '/home/lidian/models/emotion/origin/Train_Val_face_qiyi_0.8_con_16_resize_256_pool5'
     in_filename_list  = 'train_val_filename.txt'
     in_framenum_list  = 'train_val_framenum.txt'
     in_labels_list    = 'train_val_labels.txt'
 
-    out_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+    out_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3_49_512'
     out_annotation_path = '/home/lidian/models/emotion/datas/train_val_emotion_annotations.pickle'
 
 #for test
 elif phrase == 'test':
     in_annotation_dir = '/home/lidian/models/emotion/labels'
-    in_feat_dir       = '/home/lidian/models/emotion/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3'
+    in_feat_dir       = '/home/lidian/models/emotion/origin/Test_sub_face_qiyi_0.8_con_16_resize_256_pool5'
     in_filename_list  = 'test_filename.txt'
     in_framenum_list  = 'test_framenum.txt'
     in_labels_list    = 'test_labels.txt'
 
-    out_feat_dir        = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+    out_feat_dir        = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_49_512'
     out_annotation_path = '/home/lidian/models/emotion/datas/test_emotion_annotations.pickle'
 
 else:
@@ -70,7 +73,7 @@ for vid, fn in zip(annotations['videoid'], annotations['framenum']):
     print(vid, fn)
     filename = os.path.join(in_feat_dir, vid + ".dat")
 
-    video_feats = np.zeros((fn, 196, 512), dtype=np.float32)
+    video_feats = np.zeros((fn, fea_map_size, kernel_num), dtype=np.float32)
 
     fi = 0
     with open(filename, 'rb') as f:
@@ -81,9 +84,9 @@ for vid, fn in zip(annotations['videoid'], annotations['framenum']):
 
             ind = struct.unpack("i", data)  # index = bytes2int(fi, 'little')
 
-            fea = f.read(512 * 14 * 14 * 4)
+            fea = f.read(kernel_num * fea_map_size * 4)
 
-            video_feats[fi] = np.fromstring(fea, dtype=np.float32).reshape((512, 196)).swapaxes(0, 1) #switch feature the vector
+            video_feats[fi] = np.fromstring(fea, dtype=np.float32).reshape((kernel_num, fea_map_size)).swapaxes(0, 1) #switch feature the vector
 
             fi += 1
 
