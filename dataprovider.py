@@ -15,14 +15,29 @@ def bytes2int( tb, order='big'):
 
 
 class DataProvider():
-    def __init__(self, maxFrame, valid_portion, trainValfeat_dir, trainAnnotation_path, testfeat_dir, testAnnotation_path):
+    def __init__(self, maxFrame, valid_portion = 0, feat_size = 196, ctx_dim = 512, trainValfeat_dir = None, trainAnnotation_path = None, \
+                 testfeat_dir = None, testAnnotation_path = None):
+
         self.maxFrame = maxFrame
 
-        self.trainValAnnotation = pd.read_pickle(trainAnnotation_path)
-        self.trainValfeat_dir = trainValfeat_dir
+        if trainAnnotation_path is not None:
+            self.trainValAnnotation = pd.read_pickle(trainAnnotation_path)
 
-        self.testAnnotation = pd.read_pickle(testAnnotation_path)
-        self.testfeat_dir = testfeat_dir
+            n = len(self.trainValAnnotation)
+            self.n_train = n * (1 - self.valid_portion)
+            self.n_val = n - self.n_train
+
+            self.trainValfeat_dir = trainValfeat_dir
+
+            sidx = np.random.permutation(n)
+            self.train_set = sidx[:self.n_train]
+            self.valid_set = sidx[self.n_train:]
+
+        if testAnnotation_path is not None:
+            self.testAnnotation = pd.read_pickle(testAnnotation_path)
+            self.testfeat_dir = testfeat_dir
+
+            self.test_set = range(len(self.testAnnotation))
 
         self.tkf = None
         self.vkf = None
@@ -34,15 +49,8 @@ class DataProvider():
 
         self.valid_portion = valid_portion
 
-        n = len(self.trainValAnnotation)
-        self.n_train = n * (1 - self.valid_portion)
-        self.n_val = n - self.n_train
-
-        sidx = np.random.permutation(n)
-        self.train_set = sidx[:self.n_train]
-        self.valid_set = sidx[self.n_train:]
-
-        self.test_set = range(len(self.testAnnotation))
+        self.feat_size = feat_size
+        self.ctx_dim = ctx_dim
 
         self.mem_caches = OrderedDict()
         #print(self.train_set)
@@ -70,7 +78,7 @@ class DataProvider():
             i += 1
 
         #feat
-        feats = np.zeros((len(ann_list), self.maxFrame, 49, 512))
+        feats = np.zeros((len(ann_list), self.maxFrame, self.feat_size, self.ctx_dim))
 
         vi = 0
         for vid in ann_list['videoid']:
@@ -113,7 +121,7 @@ class DataProvider():
                 if cachable:
                     self.mem_caches[vid] = fea
 
-            video_feats = np.zeros((self.maxFrame, 49, 512), dtype=np.float32)
+            video_feats = np.zeros(feats.shape[1:], dtype=np.float32)
 
             fn = fea.shape[0]
             if fn > self.maxFrame:

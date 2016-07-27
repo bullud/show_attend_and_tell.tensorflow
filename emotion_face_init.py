@@ -241,7 +241,7 @@ def train(pretrained_model_path=pretrained_model_path):
 
     accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
-    saver = tf.train.Saver(max_to_keep=50)
+    saver = tf.train.Saver(max_to_keep=500)
 
     train_op = tf.train.AdamOptimizer(learning_rate).minimize(loss)
 
@@ -302,31 +302,73 @@ def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=m
     annotation_data = pd.read_pickle(test_annotation_path)
     emotions = annotation_data['emotion'].values
 
-    n_emotions = 7
-    feat = np.load(test_feat).reshape(-1, ctx_shape[1], ctx_shape[0]).swapaxes(1,2)
+    display_step = 5
 
     sess = tf.InteractiveSession()
 
     emotion_recognizer = Emotion_Recognizer(
-            n_emotions=n_emotions,
-            dim_ctx=dim_ctx,
-            dim_hidden=dim_hidden,
-            n_lstm_steps=maxlen,
-            batch_size=batch_size,
-            ctx_shape=ctx_shape)
+        n_emotions=n_emotions,  # m
+        dim_ctx=dim_ctx,        # D
+        dim_hidden=dim_hidden,  # n
+        n_lstm_steps=maxFrame,  #
+        batch_size=batch_size,
+        ctx_shape=ctx_shape,
+        bias_init_vector=None)
 
-    context, generated_emotion, logit_emotion, alpha_list = emotion_recognizer.build_generator(maxlen=maxlen)
+    _, pred_emotions, context, emotion, mask = emotion_recognizer.build_model()
 
-    saver = tf.train.Saver()
-    saver.restore(sess, model_path)
+    tf.initialize_all_variables().run()
 
-    generated_emotion = sess.run(generated_emotion, feed_dict={context:feat})
+    if pretrained_model_path is not None:
+        print "Starting with pretrained model"
+        saver.restore(sess, pretrained_model_path)
 
-    alpha_list_val = sess.run(alpha_list, feed_dict={context:feat})
+    num_test_batch = dp.initTestEpoch(batch_size, shuffle=True)
 
-    return generated_emotion, alpha_list_val
+    stop_time = 0
 
-#    ipdb.set_trace()
+    uidx = 0
+
+    print("traning begin!")
+    for epoch in range(n_epochs):
+        num_batch = dp.initTrainEpoch(batch_size, shuffle=True)
+
+        start_time = time.time()
+        for batchi in range(num_batch):
+
+            # Select the random examples for this minibatch
+            feats, masks, emotions = dp.getTrainBatch()
+
+            # print("getTrainBatch time： %f sec" %(stop_time - start_time) )
+
+            sess.run(train_op, feed_dict={context: feats, emotion: emotions, mask: masks})
+
+            if uidx % display_step == 0:
+                stop_time = time.time()
+
+                cost = sess.run(loss, feed_dict={context: feats, emotion: emotions, mask: masks})
+
+                print("epoch %d, batch %d, cost %f, ave batch time %f") % (
+                epoch, batchi, cost, (stop_time - start_time) / display_step)
+
+                start_time = time.time()
+
+            uidx += 1
+
+        acc_mean = 0.0
+        for test_batchi in range(num_test_batch):
+            tfeats, tmasks, temotions = dp.getTestBatch()
+            acc = sess.run(accuracy, feed_dict={context: tfeats, emotion: temotions, mask: tmasks})
+            acc_mean += acc
+
+        acc_mean = acc_mean / num_test_batch
+
+        print("epoch %d, accurracy %f ") % (epoch, acc_mean)
+
+        saver.save(sess, os.path.join(model_path, 'model-' + str(acc_mean)), global_step=epoch)
+
+
+#   ipdb.set_trace()
 
 
 train(pretrained_model_path=None)

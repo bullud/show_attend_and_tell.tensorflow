@@ -130,7 +130,7 @@ class Emotion_Recognizer():
         pred_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b    #[batch_size, n_emotions]
         cross_entropy = tf.nn.softmax_cross_entropy_with_logits(pred_emotions, onehot_labels) #[batch_size, 1]
 
-        loss = tf.reduce_sum(cross_entropy)/batch_size
+        loss = tf.reduce_mean(cross_entropy)
 
 
         return loss, pred_emotions, context, emotion, mask
@@ -206,10 +206,13 @@ pretrained_model_path = './model/model-8'
 
 ###### 잡다한 Parameters #####
 trainVal_annotation_path = '/home/lidian/models/emotion/datas/train_val_emotion_annotations.pickle'
-trainVal_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3_49_512'
+trainVal_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
 
-test_annotation_path     = '/home/lidian/models/emotion/datas/test_emotion_annotations.pickle'
-test_feat_dir            = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_49_512'
+test_sub_annotation_path     = '/home/lidian/models/emotion/datas/test_emotion_annotations.pickle'
+test_sub_feat_dir            = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+
+test_full_annotation_path     = '/home/lidian/models/emotion/datas/test_full_emotion_annotations.pickle'
+test_full_feat_dir            = '/home/lidian/models/emotion/datas/Test_full_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
 
 
 
@@ -220,7 +223,7 @@ def train(pretrained_model_path=pretrained_model_path):
 
     dp = dataprovider.DataProvider(maxFrame = maxFrame, valid_portion = valid_portion,
                                    trainValfeat_dir = trainVal_feat_dir, trainAnnotation_path= trainVal_annotation_path,
-                                   testfeat_dir = test_feat_dir, testAnnotation_path = test_annotation_path)
+                                   testfeat_dir = test_sub_feat_dir, testAnnotation_path = test_sub_annotation_path)
     display_step = 5
     learning_rate = 0.001
 
@@ -298,12 +301,10 @@ def train(pretrained_model_path=pretrained_model_path):
 
 
 
-def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=maxFrame):
-    annotation_data = pd.read_pickle(test_annotation_path)
-    emotions = annotation_data['emotion'].values
+def test(maxFrame = maxFrame, model_path = 'model_dev/model-0.284313741852-53',
+         testfeat_dir = test_full_feat_dir, testAnnotation_path = test_full_annotation_path):
 
-    n_emotions = 7
-    feat = np.load(test_feat).reshape(-1, ctx_shape[1], ctx_shape[0]).swapaxes(1,2)
+    dp = dataprovider.DataProvider(maxFrame=maxFrame, feat_size=196, ctx_dim=512, testfeat_dir=testfeat_dir, testAnnotation_path=testAnnotation_path)
 
     sess = tf.InteractiveSession()
 
@@ -311,22 +312,36 @@ def test(test_feat='./guitar_player.npy', model_path='./model/model-6', maxlen=m
             n_emotions=n_emotions,
             dim_ctx=dim_ctx,
             dim_hidden=dim_hidden,
-            n_lstm_steps=maxlen,
-            batch_size=batch_size,
+            n_lstm_steps=maxFrame,
+            batch_size=1,
             ctx_shape=ctx_shape)
 
-    context, generated_emotion, logit_emotion, alpha_list = emotion_recognizer.build_generator(maxlen=maxlen)
+    loss, pred_emotions, context, emotion, mask = emotion_recognizer.build_model()
 
     saver = tf.train.Saver()
+
     saver.restore(sess, model_path)
 
-    generated_emotion = sess.run(generated_emotion, feed_dict={context:feat})
+    num_test_batch = dp.initTestEpoch(1, shuffle=True)
 
-    alpha_list_val = sess.run(alpha_list, feed_dict={context:feat})
+    for batchi in range(num_test_batch):
 
-    return generated_emotion, alpha_list_val
+        start_time = time.time()
+
+        feats, masks, emotions = dp.getTestBatch()
+
+        pred = sess.run(pred_emotions, feed_dict={context: feats, emotion: emotions, mask: masks})
+
+        pred_softmax = tf.nn.softmax(pred)
+
+        emotion = tf.argmax(pred_softmax, 1)
+
+        stop_time = time.time()
+
+        print("batch %d, emotion %d, time %f") % (batchi, emotion, (stop_time - start_time))
+
 
 #    ipdb.set_trace()
 
-
-train(pretrained_model_path=None)
+test()
+#train(pretrained_model_path=None)

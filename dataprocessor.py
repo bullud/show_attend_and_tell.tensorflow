@@ -12,7 +12,7 @@ def bytes2int( tb, order='big'):
     for j in seq: i = (i<<8)+ int(tb[j].encode('hex'), 16)
     return i
 
-phrase = 'train'
+phrase = 'fulltest'
 
 #input data
 in_annotation_dir = ''
@@ -47,7 +47,18 @@ elif phrase == 'test':
     in_labels_list    = 'test_labels.txt'
 
     out_feat_dir        = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_49_512'
-    out_annotation_path = '/home/lidian/models/emotion/datas/test_emotion_annotations.pickle'
+    out_annotation_path = '/home/lidian/models/emotion/datas/Test_sub_emotion_annotations.pickle'
+
+#for fulltest
+elif phrase == 'fulltest':
+    in_annotation_dir = '/home/lidian/models/emotion/labels'
+    in_feat_dir       = '/home/lidian/models/emotion/origin/Test_full_face_qiyi_0.8_con_16_resize_256_pool5'
+    in_filename_list  = 'test_full_filename.txt'
+    in_framenum_list  = 'test_full_framenum.txt'
+    in_labels_list    = 'test_full_labels.txt'
+
+    out_feat_dir        = '/home/lidian/models/emotion/datas/Test_full_face_qiyi_0.8_con_16_resize_256_conv5_3_49_512'
+    out_annotation_path = '/home/lidian/models/emotion/datas/Test_full_emotion_annotations.pickle'
 
 else:
     print("phrase unsupported")
