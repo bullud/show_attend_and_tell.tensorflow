@@ -19,6 +19,7 @@ class DataProvider():
                  testfeat_dir = None, testAnnotation_path = None):
 
         self.maxFrame = maxFrame
+        self.valid_portion = valid_portion
 
         if trainAnnotation_path is not None:
             self.trainValAnnotation = pd.read_pickle(trainAnnotation_path)

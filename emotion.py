@@ -135,71 +135,16 @@ class Emotion_Recognizer():
 
         return loss, pred_emotions, context, emotion, mask
 
-    def build_generator(self, maxlen):
-        context = tf.placeholder("float32", [1, self.n_lstm_steps, self.ctx_shape[0], self.ctx_shape[1]])
-
-        #TODO: need to modify
-        h, c = self.get_initial_lstm(tf.reduce_mean(context, 1)) #[1, dim_hidden]
-        context = tf.squeeze(context)   #[n_lstm_steps, 196, dim_ctx]
-
-        alpha_list = []
-
-        hh = []
-        for ind in range(maxlen):
-            one_step_context = context[ind, :, :]                           #[196, 512]
-            context_encode = tf.matmul(one_step_context, self.image_att_W)  #[196, 512]
-            context_encode = context_encode + tf.matmul(h, self.hidden_att_W) + self.pre_att_b
-            context_encode = tf.nn.tanh(context_encode) #[196, 512]
-
-            alpha = tf.matmul(context_encode, self.att_W) + self.att_b  #[196. 1]
-            alpha = tf.reshape(alpha, [-1, self.ctx_shape[0]])   #[1, 196]
-            alpha = tf.nn.softmax(alpha) #[1, 196]
-
-            alpha = tf.reshape(alpha, (ctx_shape[0], -1))  #[196, 1]
-            alpha_list.append(alpha)
-
-            weighted_context = tf.reduce_sum(tf.squeeze(context)[ind] * alpha, 0) #[dim_ctx]
-            weighted_context = tf.expand_dims(weighted_context, 0)                #[1, dim_ctx]
-
-            lstm_preactive = tf.matmul(h, self.lstm_U) + tf.matmul(weighted_context, self.image_encode_W)
-
-            i, f, o, new_c = tf.split(1, 4, lstm_preactive)
-
-            i = tf.nn.sigmoid(i)
-            f = tf.nn.sigmoid(f)
-            o = tf.nn.sigmoid(o)
-            new_c = tf.nn.tanh(new_c)
-
-            c = f*c + i*new_c
-            h = o*tf.nn.tanh(new_c)
-
-            hh.append(tf.expand_dims(h, 1))  # [batch_size=1, 1, dim_hidden]
-
-        hc = np.concatenate([h[i] for i in range(self.n_lstm_steps)], axis=1)  # [batch_size=1, n_lstm_steps, dim_hidden]
-
-        # compute mean hm
-        hm = tf.reduce_sum(hc, 1) / self.n_lstm_steps   #[batch_size=1, dim_hidden]
-
-        logits = tf.matmul(hm, self.decode_lstm_W) + self.decode_lstm_b #[batch_size=1, dim_embed]
-
-        logits = tf.nn.relu(logits)
-
-        logit_emotions = tf.matmul(logits, self.decode_emotion_W) + self.decode_emotion_b  #[batch_size=1, n_emotions]
-
-        generated_emotion = tf.argmax(logit_emotions, 1)
-
-        return context, generated_emotion, logit_emotions, alpha_list
-
-
 
 ###### 학습 관련 Parameters ######
 n_epochs=500
 batch_size=30
 n_emotions=7
 maxFrame = 80
+feat_size = 196
 dim_ctx=512
 dim_hidden=256
-ctx_shape=[49,512]
+ctx_shape=[feat_size,dim_ctx]
 valid_portion = 0.0
 pretrained_model_path = './model/model-8'
 #############################
@@ -211,8 +156,8 @@ trainVal_feat_dir        = '/home/lidian/models/emotion/datas/Train_Val_face_qiy
 test_sub_annotation_path     = '/home/lidian/models/emotion/datas/test_emotion_annotations.pickle'
 test_sub_feat_dir            = '/home/lidian/models/emotion/datas/Test_sub_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
 
-test_full_annotation_path     = '/home/lidian/models/emotion/datas/test_full_emotion_annotations.pickle'
-test_full_feat_dir            = '/home/lidian/models/emotion/datas/Test_full_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
+test_full_annotation_path    = '/home/lidian/models/emotion/datas/test_full_emotion_annotations.pickle'
+test_full_feat_dir           = '/home/lidian/models/emotion/datas/Test_full_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
 
 
 
@@ -301,10 +246,14 @@ def train(pretrained_model_path=pretrained_model_path):
 
 
 
-def test(maxFrame = maxFrame, model_path = 'model_dev/model-0.284313741852-53',
+def test(maxFrame = maxFrame, model_path = 'model/model-0.284313741852-53',
          testfeat_dir = test_full_feat_dir, testAnnotation_path = test_full_annotation_path):
 
-    dp = dataprovider.DataProvider(maxFrame=maxFrame, feat_size=196, ctx_dim=512, testfeat_dir=testfeat_dir, testAnnotation_path=testAnnotation_path)
+
+    dp = dataprovider.DataProvider(maxFrame=maxFrame, feat_size=ctx_shape[0], ctx_dim=ctx_shape[1], \
+                                   testfeat_dir=testfeat_dir, testAnnotation_path=testAnnotation_path)
+
+    testAnnotation = pd.read_pickle(testAnnotation_path)
 
     sess = tf.InteractiveSession()
 
@@ -318,30 +267,32 @@ def test(maxFrame = maxFrame, model_path = 'model_dev/model-0.284313741852-53',
 
     loss, pred_emotions, context, emotion, mask = emotion_recognizer.build_model()
 
+    pred_softmax = tf.nn.softmax(pred_emotions)
+
     saver = tf.train.Saver()
 
     saver.restore(sess, model_path)
 
-    num_test_batch = dp.initTestEpoch(1, shuffle=True)
+    num_test_batch = dp.initTestEpoch(1, shuffle=False) #must set to (1, False） !!!
 
-    for batchi in range(num_test_batch):
-
-        start_time = time.time()
+    result = {}
+    for batchi, vid in zip(range(num_test_batch), testAnnotation['videoid'].values):
 
         feats, masks, emotions = dp.getTestBatch()
 
-        pred = sess.run(pred_emotions, feed_dict={context: feats, emotion: emotions, mask: masks})
+        pred = sess.run(pred_softmax, feed_dict={context: feats, emotion: emotions, mask: masks})
 
-        pred_softmax = tf.nn.softmax(pred)
+        em = np.argmax(pred)
 
-        emotion = tf.argmax(pred_softmax, 1)
+        print("vid %s, emotion %d") % (vid, em)
 
-        stop_time = time.time()
-
-        print("batch %d, emotion %d, time %f") % (batchi, emotion, (stop_time - start_time))
-
+        result[vid] = pred
 
 #    ipdb.set_trace()
+
+    np.save('test_result', result)
+
+    print('done ! total %d test videos' %num_test_batch)
 
 test()
 #train(pretrained_model_path=None)

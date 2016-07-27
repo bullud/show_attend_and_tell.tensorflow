@@ -24,7 +24,7 @@ in_labels_list    = ''
 out_feat_dir       = ''
 out_annotation_path = ''
 
-fea_map_size = 49
+fea_map_size = 196
 kernel_num   = 512
 
 #for train_val
@@ -52,12 +52,12 @@ elif phrase == 'test':
 #for fulltest
 elif phrase == 'fulltest':
     in_annotation_dir = '/home/lidian/models/emotion/labels'
-    in_feat_dir       = '/home/lidian/models/emotion/origin/Test_full_face_qiyi_0.8_con_16_resize_256_pool5'
+    in_feat_dir       = '/home/lidian/models/emotion/origin/Test_full_face_qiyi_0.8_con_16_resize_256_conv5_3'
     in_filename_list  = 'test_full_filename.txt'
     in_framenum_list  = 'test_full_framenum.txt'
     in_labels_list    = 'test_full_labels.txt'
 
-    out_feat_dir        = '/home/lidian/models/emotion/datas/Test_full_face_qiyi_0.8_con_16_resize_256_conv5_3_49_512'
+    out_feat_dir        = '/home/lidian/models/emotion/datas/Test_full_face_qiyi_0.8_con_16_resize_256_conv5_3_196_512'
     out_annotation_path = '/home/lidian/models/emotion/datas/Test_full_emotion_annotations.pickle'
 
 else:
