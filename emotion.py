@@ -292,7 +292,7 @@ def test(maxFrame = maxFrame, model_path = 'model/model-0.284313741852-53',
 
     np.save('test_result', result)
 
-    print('done ! total %d test videos' %num_test_batch)
+    print('done! total %d test videos' %num_test_batch)
 
 test()
 #train(pretrained_model_path=None)
