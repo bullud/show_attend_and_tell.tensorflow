@@ -5,6 +5,8 @@ import cPickle
 #from cnn_util import *
 import struct
 from collections import OrderedDict
+import random
+
 
 def bytes2int( tb, order='big'):
     if order == 'big': seq=[0,1,2,3]
@@ -119,6 +121,7 @@ class DataProvider():
                 filename = os.path.join(feat_dir, vid + ".npy")
 
                 fea = np.load(filename)
+
                 if cachable:
                     self.mem_caches[vid] = fea
 
@@ -127,9 +130,14 @@ class DataProvider():
             fn = fea.shape[0]
             if fn > self.maxFrame:
                 fn = self.maxFrame
-            #print(fn)
-            for i in range(fn):
-                video_feats[i] = fea[i]
+
+            # random select fn frames
+            selectframe = random.sample(range(fea.shape[0]), fn)
+
+            selectframe.sort()
+
+            for i, j in zip(range(fn), selectframe):
+                video_feats[i] = fea[j]
 
             #np.save(cache_filename, video_feats)
 

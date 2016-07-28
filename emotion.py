@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import cPickle
 import dataprovider
-
+from collections import OrderedDict
 
 #from tensorflow.models.rnn import rnn_cell
 import tensorflow.python.platform
@@ -219,8 +219,6 @@ def train(pretrained_model_path=pretrained_model_path):
 
             sess.run(train_op, feed_dict={ context:feats, emotion:emotions, mask:masks})
 
-
-
             if uidx % display_step == 0 :
                 stop_time = time.time()
 
@@ -246,7 +244,7 @@ def train(pretrained_model_path=pretrained_model_path):
 
 
 
-def test(maxFrame = maxFrame, model_path = 'model/model-0.284313741852-53',
+def test(maxFrame = maxFrame, model_path = 'model/model-0.290196103208-123',
          testfeat_dir = test_full_feat_dir, testAnnotation_path = test_full_annotation_path):
 
 
@@ -275,7 +273,8 @@ def test(maxFrame = maxFrame, model_path = 'model/model-0.284313741852-53',
 
     num_test_batch = dp.initTestEpoch(1, shuffle=False) #must set to (1, False） !!!
 
-    result = {}
+    result = np.zeros((num_test_batch, 7))
+    i = 0
     for batchi, vid in zip(range(num_test_batch), testAnnotation['videoid'].values):
 
         feats, masks, emotions = dp.getTestBatch()
@@ -285,8 +284,10 @@ def test(maxFrame = maxFrame, model_path = 'model/model-0.284313741852-53',
         em = np.argmax(pred)
 
         print("vid %s, emotion %d") % (vid, em)
-
-        result[vid] = pred
+        result[i, : ] = pred
+        #result.apnd(zip(vid, pred))
+        #result[vid] = pred
+        i+=1
 
 #    ipdb.set_trace()
 
@@ -294,5 +295,7 @@ def test(maxFrame = maxFrame, model_path = 'model/model-0.284313741852-53',
 
     print('done! total %d test videos' %num_test_batch)
 
-test()
+
+
+train()
 #train(pretrained_model_path=None)
