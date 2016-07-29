@@ -18,10 +18,11 @@ def bytes2int( tb, order='big'):
 
 class DataProvider():
     def __init__(self, maxFrame, valid_portion = 0, feat_size = 196, ctx_dim = 512, trainValfeat_dir = None, trainAnnotation_path = None, \
-                 testfeat_dir = None, testAnnotation_path = None):
+                 testfeat_dir = None, testAnnotation_path = None, doMemCache = False):
 
         self.maxFrame = maxFrame
         self.valid_portion = valid_portion
+        self.doCaches = doMemCache
 
         if trainAnnotation_path is not None:
             self.trainValAnnotation = pd.read_pickle(trainAnnotation_path)
@@ -156,7 +157,7 @@ class DataProvider():
 
         ann_list = self.trainValAnnotation.iloc[idx_list[1]]
 
-        return self.getFeature(ann_list, self.trainValfeat_dir, True)
+        return self.getFeature(ann_list, self.trainValfeat_dir, self.doCaches)
 
 
     def initTrainEpoch(self, batch_size, shuffle = True):
@@ -215,7 +216,7 @@ class DataProvider():
 
         ann_list = self.testAnnotation.iloc[idx_list[1]]
 
-        return self.getFeature(ann_list, self.testfeat_dir, True)
+        return self.getFeature(ann_list, self.testfeat_dir, self.doCaches)
 
     def initTestEpoch(self, batch_size, shuffle=False):
         if shuffle:

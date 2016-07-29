@@ -140,13 +140,14 @@ class Emotion_Recognizer():
 n_epochs=500
 batch_size=30
 n_emotions=7
-maxFrame = 80
+max_Frame = 30
 feat_size = 196
 dim_ctx=512
 dim_hidden=256
 ctx_shape=[feat_size,dim_ctx]
 valid_portion = 0.0
 pretrained_model_path = './model/model-8'
+model_path = './models/'
 #############################
 
 ###### 잡다한 Parameters #####
@@ -161,12 +162,34 @@ test_full_feat_dir           = '/home/lidian/models/emotion/datas/Test_full_face
 
 
 
-model_path = './model_dev/'
+
 #############################
 
 def train(pretrained_model_path=pretrained_model_path):
+    print('Parameters: begin ###########################################################')
 
-    dp = dataprovider.DataProvider(maxFrame = maxFrame, valid_portion = valid_portion,
+    print("n_epoches = %d"  %n_emotions)
+    print('batch_size = %d' %batch_size)
+    print('n_emotion = %d'  %n_emotions)
+    print('max_Frame = %d'  %max_Frame)
+    print('feat_size = %d'  %feat_size)
+    print('dim_ctx = %d'    %dim_ctx)
+    print('dim_hidden = %d' %dim_hidden)
+    print('ctx_shape  = （%d，%d）' %(feat_size, dim_ctx))
+    print('valid_portion = %f'   %valid_portion)
+    print('load_model_file = %s' %pretrained_model_path)
+    print('save_model_dir = %s'  %model_path)
+
+    print('trainVal label file = %s'  %trainVal_annotation_path)
+    print('trainVal feat dir = %s'    %trainVal_feat_dir)
+    print('test_sub label file = %s'  %test_sub_annotation_path)
+    print('test_sub feat dir = %s'    %test_sub_feat_dir)
+    print('test_full label file = %s' %test_full_annotation_path)
+    print('test_full feat dir = %s'   %test_full_feat_dir)
+
+    print('Parameters: end ###########################################################')
+
+    dp = dataprovider.DataProvider(maxFrame = max_Frame, valid_portion = valid_portion,
                                    trainValfeat_dir = trainVal_feat_dir, trainAnnotation_path= trainVal_annotation_path,
                                    testfeat_dir = test_sub_feat_dir, testAnnotation_path = test_sub_annotation_path)
     display_step = 5
@@ -178,7 +201,7 @@ def train(pretrained_model_path=pretrained_model_path):
             n_emotions=n_emotions,        #m
             dim_ctx=dim_ctx,              #D
             dim_hidden=dim_hidden,        #n
-            n_lstm_steps=maxFrame,        #
+            n_lstm_steps=max_Frame,        #
             batch_size=batch_size,
             ctx_shape=ctx_shape,
             bias_init_vector=None)
@@ -244,7 +267,7 @@ def train(pretrained_model_path=pretrained_model_path):
 
 
 
-def test(maxFrame = maxFrame, model_path = 'model/model-0.290196103208-123',
+def test(maxFrame = max_Frame, model_path = 'model/model-0.290196103208-123',
          testfeat_dir = test_full_feat_dir, testAnnotation_path = test_full_annotation_path):
 
 
@@ -297,5 +320,5 @@ def test(maxFrame = maxFrame, model_path = 'model/model-0.290196103208-123',
 
 
 
-train()
-#train(pretrained_model_path=None)
+#test()
+train(pretrained_model_path=None)
