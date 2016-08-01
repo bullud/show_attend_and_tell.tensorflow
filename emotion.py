@@ -176,9 +176,9 @@ def train(pretrained_model_path=pretrained_model_path):
     print('dim_ctx = %d'    %dim_ctx)
     print('dim_hidden = %d' %dim_hidden)
     print('ctx_shape  = （%d，%d）' %(feat_size, dim_ctx))
-    print('valid_portion = %f'   %valid_portion)
-    print('load_model_file = %s' %pretrained_model_path)
-    print('save_model_dir = %s'  %model_path)
+    print('valid_portion = %f'     %valid_portion)
+    print('load_model_file = %s'   %pretrained_model_path)
+    print('save_model_dir = %s'    %model_path)
 
     print('trainVal label file = %s'  %trainVal_annotation_path)
     print('trainVal feat dir = %s'    %trainVal_feat_dir)
@@ -222,7 +222,7 @@ def train(pretrained_model_path=pretrained_model_path):
         print "Starting with pretrained model"
         saver.restore(sess, pretrained_model_path)
 
-    num_test_batch = dp.initTestEpoch(batch_size, shuffle= True)
+    num_test_batch = dp.initTestEpoch(batch_size = 1, shuffle= True)
 
     stop_time = 0
 
