@@ -4,6 +4,8 @@ import os
 import cPickle
 from cnn_util import *
 import struct
+import lmdb
+
 
 def bytes2int( tb, order='big'):
     if order == 'big': seq=[0,1,2,3]
@@ -12,7 +14,7 @@ def bytes2int( tb, order='big'):
     for j in seq: i = (i<<8)+ int(tb[j].encode('hex'), 16)
     return i
 
-phrase = 'fulltest'
+phrase = 'train'
 
 #input data
 in_annotation_dir = ''
@@ -30,7 +32,7 @@ kernel_num   = 512
 #for train_val
 if phrase == 'train':
     in_annotation_dir = '/home/lidian/models/emotion/labels'
-    in_feat_dir       = '/home/lidian/models/emotion/origin/Train_Val_face_qiyi_0.8_con_16_resize_256_pool5'
+    in_feat_dir       = '/home/lidian/models/emotion/origin/Train_Val_face_qiyi_0.8_con_16_resize_256_conv5_3'
     in_filename_list  = 'train_val_filename.txt'
     in_framenum_list  = 'train_val_framenum.txt'
     in_labels_list    = 'train_val_labels.txt'
@@ -78,10 +80,19 @@ ann = pd.merge(annotations, annotations)
 #prepare annotation
 ann.to_pickle(out_annotation_path)
 
+lmdb_path = './lmdb'
+
+env = lmdb.Environment(lmdb_path, readonly = False, map_size=1048576 * 1024, metasync=False, sync=True, map_async=True)
+
+env.set_mapsize(1024 * 1024 * 1024 * 1024);
+
+lmdb_txn = env.begin(write=True)
 
 #prepare feature
 for vid, fn in zip(annotations['videoid'], annotations['framenum']):
+
     print(vid, fn)
+
     filename = os.path.join(in_feat_dir, vid + ".dat")
 
     video_feats = np.zeros((fn, fea_map_size, kernel_num), dtype=np.float32)
@@ -99,6 +110,8 @@ for vid, fn in zip(annotations['videoid'], annotations['framenum']):
 
             video_feats[fi] = np.fromstring(fea, dtype=np.float32).reshape((kernel_num, fea_map_size)).swapaxes(0, 1) #switch feature the vector
 
+            lmdb_txn.put(vid + str(fi), video_feats[fi].tobytes())
+
             fi += 1
 
     if fi != fn:
@@ -106,4 +119,13 @@ for vid, fn in zip(annotations['videoid'], annotations['framenum']):
         break
 
     filename = os.path.join(out_feat_dir, vid)
-    np.save(filename, arr = video_feats)
+    #np.save(filename, arr = video_feats)
+
+    env.sync(True)
+
+
+
+for vid, fn in zip(annotations['videoid'], annotations['framenum']):
+    for fi in range(fn):
+        data = lmdb_txn.get(vid + str(fi))
+        print(len(data))
